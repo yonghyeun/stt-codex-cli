@@ -15,6 +15,7 @@ from pathlib import Path
 
 
 DEFAULT_CMD = "codex"
+PARENT_PREFIX = "[stt-parent]"
 READ_SIZE = 4096
 
 
@@ -48,6 +49,21 @@ def parse_args() -> argparse.Namespace:
         help="Working directory for the child command. Default: current directory.",
     )
     parser.add_argument(
+        "--quiet-parent",
+        action="store_true",
+        help="Hide parent wrapper status lines.",
+    )
+    parser.add_argument(
+        "--no-color",
+        action="store_true",
+        help="Disable color in parent wrapper status lines.",
+    )
+    parser.add_argument(
+        "--codex-alt-screen",
+        action="store_true",
+        help="Do not add --no-alt-screen when running Codex.",
+    )
+    parser.add_argument(
         "cmd_args",
         nargs=argparse.REMAINDER,
         help="Arguments after -- are passed to the child command.",
@@ -60,8 +76,49 @@ def parse_args() -> argparse.Namespace:
     return args
 
 
+def is_codex_command(command: str) -> bool:
+    return Path(command).name == "codex"
+
+
+def should_add_codex_no_alt_screen(args: argparse.Namespace) -> bool:
+    return (
+        is_codex_command(args.cmd)
+        and not args.codex_alt_screen
+        and "--no-alt-screen" not in args.cmd_args
+    )
+
+
 def child_argv(args: argparse.Namespace) -> list[str]:
-    return [args.cmd, *args.cmd_args]
+    cmd_args = list(args.cmd_args)
+    if should_add_codex_no_alt_screen(args):
+        cmd_args.insert(0, "--no-alt-screen")
+    return [args.cmd, *cmd_args]
+
+
+def format_command(argv: list[str]) -> str:
+    return " ".join(argv)
+
+
+def parent_status(args: argparse.Namespace, message: str) -> None:
+    if args.quiet_parent:
+        return
+    prefix = PARENT_PREFIX
+    if sys.stderr.isatty() and not args.no_color:
+        prefix = f"\033[36m{PARENT_PREFIX}\033[0m"
+    print(f"{prefix} {message}", file=sys.stderr, flush=True)
+
+
+def parent_banner(args: argparse.Namespace, argv: list[str], cwd: str | None) -> None:
+    if args.quiet_parent:
+        return
+    display_cwd = cwd if cwd is not None else os.getcwd()
+    parent_status(args, f"starting child: {format_command(argv)}")
+    parent_status(args, f"cwd: {display_cwd}")
+    parent_status(args, "child output follows")
+    if sys.stderr.isatty() and not args.no_color:
+        print("\033[36m" + ("-" * 48) + "\033[0m", file=sys.stderr, flush=True)
+    else:
+        print("-" * 48, file=sys.stderr, flush=True)
 
 
 def validate_cwd(raw_cwd: str | None) -> str | None:
@@ -185,9 +242,13 @@ def main() -> int:
     try:
         cwd = validate_cwd(args.cwd)
         argv = child_argv(args)
+        parent_banner(args, argv, cwd)
         pid, child_fd = spawn_child(argv, cwd)
+        parent_status(args, f"child pid: {pid}")
         with TerminalMode():
-            return passthrough(pid, child_fd)
+            exit_code = passthrough(pid, child_fd)
+        parent_status(args, f"child exited: {exit_code}")
+        return exit_code
     except KeyboardInterrupt:
         return 130
     except RuntimeError as error:

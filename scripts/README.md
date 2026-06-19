@@ -207,6 +207,11 @@ scripts/stt_codex.py --cmd python3 -- -q
 - `STT_CODEX_CMD`로 기본 command를 바꿀 수 있다.
 - `--cmd` 뒤의 command가 child PTY 안에서 실행된다.
 - `--` 뒤의 argument는 child command에 전달된다.
+- parent wrapper status line은 `[stt-parent]` prefix로 표시된다.
+- 기본 Codex 실행에는 `--no-alt-screen`을 추가해 parent/child 경계가 scrollback에 남게 한다.
+- `--codex-alt-screen`을 주면 Codex 기본 alternate screen 동작을 유지한다.
+- `--quiet-parent`를 주면 parent status line을 숨긴다.
+- `--no-color`를 주면 parent status line 색상을 끈다.
 - 이 phase는 STT와 텍스트 삽입을 아직 수행하지 않는다.
 - Codex CLI 자동 전송은 하지 않는다.
 
