@@ -23,18 +23,19 @@
 기본 실행:
 
 ```bash
-scripts/stt_codex.py
+scripts/stt_codex.py --inject-mode fixed-text
 ```
 
 검증용 child command:
 
 ```bash
-scripts/stt_codex.py --cmd python3 -- -c 'import sys; print("child:" + sys.stdin.readline().strip())'
+scripts/stt_codex.py --inject-mode fixed-text --cmd python3 -- -c 'import sys; print("child:" + sys.stdin.readline().strip())'
 ```
 
 ## Decision
 
 - 기본 trigger는 `ctrl+t`로 둔다.
+- Phase 15 이후 기본 mode는 `stt`이며, fixed-text injection은 `--inject-mode fixed-text`로 실행한다.
 - `t` 단독키는 일반 타이핑과 충돌하므로 기본값으로 쓰지 않는다.
 - `--inject-key t`처럼 사용자가 직접 바꾸는 것은 허용한다.
 - Enter 자동 전송은 하지 않는다.

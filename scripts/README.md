@@ -212,12 +212,14 @@ scripts/stt_codex.py --cmd python3 -- -q
 - `--codex-alt-screen`을 주면 Codex 기본 alternate screen 동작을 유지한다.
 - `--quiet-parent`를 주면 parent status line을 숨긴다.
 - `--no-color`를 주면 parent status line 색상을 끈다.
-- 기본 injection key는 `ctrl+t`다.
+- 기본 injection mode는 `stt`다.
+- `stt` mode의 기본 injection key는 `t`다.
+- `fixed-text` mode의 기본 injection key는 `ctrl+t`다.
+- `--inject-mode fixed-text`로 고정 텍스트 injection을 테스트할 수 있다.
 - `--inject-text`로 child PTY에 삽입할 고정 텍스트를 바꾼다.
 - `--inject-key`로 삽입 trigger key를 바꾼다.
 - `--disable-inject-key`를 주면 모든 stdin을 child PTY로 그대로 전달한다.
 - injection은 텍스트만 삽입하며 Enter는 보내지 않는다.
-- 이 phase는 STT를 아직 수행하지 않는다.
 - Codex CLI 자동 전송은 하지 않는다.
 
 ## Prototype 14: Fixed Text Injection
@@ -225,7 +227,7 @@ scripts/stt_codex.py --cmd python3 -- -q
 STT 연결 전에 parent가 child PTY 입력창에 텍스트를 삽입할 수 있는지 검증한다.
 
 ```bash
-scripts/stt_codex.py
+scripts/stt_codex.py --inject-mode fixed-text
 ```
 
 실행 후 `Ctrl+T`를 누르면 기본 문장이 Codex 입력창에 삽입된다.
@@ -239,10 +241,43 @@ hello from stt wrapper
 검증용 child command:
 
 ```bash
-scripts/stt_codex.py --cmd python3 -- -c 'import sys; print("child:" + sys.stdin.readline().strip())'
+scripts/stt_codex.py --inject-mode fixed-text --cmd python3 -- -c 'import sys; print("child:" + sys.stdin.readline().strip())'
 ```
 
 위 command에서 `Ctrl+T`를 누르고 Enter를 누르면 child가 삽입된 텍스트를 출력한다.
+
+## Prototype 15: STT Transcript Injection
+
+기본 mode다. `t`를 누르고 말하면 녹음하고, `t` 반복 입력이 끊긴 뒤 STT raw transcript를 child PTY 입력창에 삽입한다.
+
+```bash
+scripts/stt_codex.py
+```
+
+정확도 기준 모델을 명시:
+
+```bash
+scripts/stt_codex.py --stt-model large-v3 --stt-device cuda --stt-compute-type float16
+```
+
+짧은 smoke test:
+
+```bash
+scripts/stt_codex.py --stt-model tiny --stt-device cpu --stt-compute-type int8 --cmd python3 -- -q
+```
+
+- STT mode 기본 trigger는 `t`다.
+- `t`는 child PTY로 전달되지 않고 parent가 소비한다.
+- `--inject-key ctrl+t`처럼 trigger를 바꿀 수 있다.
+- `--release-gap`은 trigger 반복 입력이 끊긴 뒤 녹음을 종료할 때까지 기다리는 시간이다.
+- `--min-duration`보다 짧은 녹음은 STT 없이 버린다.
+- `--max-duration`을 넘으면 자동으로 녹음을 종료한다.
+- 녹음 파일은 system temp directory에 임시 WAV로 만든다.
+- 기본적으로 STT 후 임시 WAV를 삭제한다.
+- `--keep-audio`를 주면 임시 WAV를 삭제하지 않는다.
+- transcript가 비어 있거나 punctuation-only이면 child PTY에 삽입하지 않는다.
+- token recovery는 수행하지 않는다.
+- Enter는 사용자가 직접 누른다.
 
 ## Prototype 1: Record Only
 
