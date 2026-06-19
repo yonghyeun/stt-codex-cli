@@ -73,6 +73,37 @@ scripts/copy_text.sh "README.md 수정해"
 - stdout에는 복사한 텍스트를 출력한다.
 - stderr에는 backend와 검증 여부를 출력한다.
 
+## Prototype 10: Audio to Clipboard
+
+기존 audio 파일을 STT로 변환하고, token recovery 후 clipboard에 복사한다.
+
+```bash
+scripts/stt_clipboard.sh fixtures/generated/kss-row-00000/audio.wav --model large-v3 --device cuda --compute-type float16
+```
+
+작은 CPU 모델로 smoke test:
+
+```bash
+scripts/stt_clipboard.sh fixtures/generated/kss-row-00000/audio.wav --model tiny --device cpu --compute-type int8
+```
+
+복원 전/후 텍스트를 파일로 남길 수 있다.
+
+```bash
+scripts/stt_clipboard.sh \
+  --output-transcript output/transcripts/raw.txt \
+  --output-recovered output/transcripts/final.txt \
+  fixtures/generated/kss-row-00000/audio.wav \
+  --model tiny --device cpu --compute-type int8
+```
+
+- wrapper option은 audio 파일 앞에 둔다.
+- audio 파일 뒤의 option은 `scripts/transcribe.sh`에 전달한다.
+- 기본적으로 token recovery를 수행한다.
+- `--no-recovery`를 주면 STT 결과를 그대로 복사한다.
+- 기본적으로 clipboard readback 검증을 수행한다.
+- `--no-copy-verify`를 주면 clipboard 검증을 생략한다.
+
 ## Prototype 1: Record Only
 
 ```bash

@@ -85,6 +85,8 @@ Phase 8 prototype은 자동 수집 이전 단계다. `memory/manual-aliases.exam
 
 Phase 9 prototype은 텍스트를 clipboard에 복사한다. 현재 Linux 기준 backend는 `xclip`이며, 복사 후 clipboard 내용을 다시 읽어 검증한다.
 
+Phase 10 prototype은 기존 audio 파일을 STT로 변환하고, token recovery를 거쳐 clipboard에 복사한다.
+
 ## Closeout Criteria
 
 - Linux 데스크탑에서 한 명령 또는 한 단축키 흐름으로 실행 가능하다.
