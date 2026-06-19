@@ -6,8 +6,9 @@ STT 실행 스크립트 위치.
 
 - 짧은 마이크 녹음.
 - 로컬 STT 변환.
-- 결과를 클립보드에 복사.
-- 수동 memory 기반 token recovery.
+- Codex CLI를 child PTY로 실행.
+- STT 결과를 Codex CLI 입력창에 삽입.
+- 사용자가 확인 후 직접 전송.
 
 ## Setup
 
@@ -187,6 +188,27 @@ xmodmap -pke | grep -E 'Alt_L|Alt_R| t '
 - `--max-duration`은 누른 채로 잊었을 때 녹음을 자동 종료하는 안전장치다.
 - `stdin-repeat` backend는 terminal focus와 key repeat 설정에 의존한다.
 - `xinput test-xi2 --root` 이벤트를 사용하므로 Wayland/Xwayland 환경에서는 동작 제약이 있을 수 있다.
+
+## Prototype 13: Codex PTY Wrapper
+
+Codex CLI를 child PTY로 실행하고 입출력을 그대로 전달한다.
+
+```bash
+scripts/stt_codex.py
+```
+
+다른 command로 passthrough를 검증할 수 있다.
+
+```bash
+scripts/stt_codex.py --cmd python3 -- -q
+```
+
+- 기본 command는 `codex`다.
+- `STT_CODEX_CMD`로 기본 command를 바꿀 수 있다.
+- `--cmd` 뒤의 command가 child PTY 안에서 실행된다.
+- `--` 뒤의 argument는 child command에 전달된다.
+- 이 phase는 STT와 텍스트 삽입을 아직 수행하지 않는다.
+- Codex CLI 자동 전송은 하지 않는다.
 
 ## Prototype 1: Record Only
 
