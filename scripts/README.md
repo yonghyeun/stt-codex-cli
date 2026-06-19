@@ -28,16 +28,29 @@ scripts/record.sh 5
 
 ## Prototype 2: Transcribe Existing Audio
 
+재현 fixture를 먼저 생성한다.
+
+```bash
+scripts/fetch_kss_fixture.py --row-idx 0
+```
+
 Smoke test는 작은 모델을 명시한다.
 
 ```bash
-scripts/transcribe.sh output/recordings/recording-YYYYMMDD-HHMMSS.wav --model tiny --device cpu --compute-type int8
+scripts/transcribe.sh fixtures/generated/kss-row-00000/audio.wav --model tiny --device cpu --compute-type int8
+```
+
+Fixture transcript를 비교한다.
+
+```bash
+scripts/transcribe.sh fixtures/generated/kss-row-00000/audio.wav --model tiny --device cpu --compute-type int8 --output output/transcripts/kss-row-00000-tiny.txt
+scripts/compare_transcript.py fixtures/generated/kss-row-00000/expected.txt output/transcripts/kss-row-00000-tiny.txt
 ```
 
 정확도 실험은 큰 모델을 우선한다.
 
 ```bash
-scripts/transcribe.sh output/recordings/recording-YYYYMMDD-HHMMSS.wav --model large-v3
+scripts/transcribe.sh fixtures/generated/kss-row-00000/audio.wav --model large-v3
 ```
 
 - 기본 모델은 정확도 우선 기준에 맞춰 `large-v3`다.
@@ -47,3 +60,5 @@ scripts/transcribe.sh output/recordings/recording-YYYYMMDD-HHMMSS.wav --model la
 - 무음 환각을 줄이기 위해 VAD filter는 기본 활성화한다.
 - 변환 결과는 stdout으로 출력한다.
 - `--output output/transcripts/example.txt`를 주면 텍스트 파일도 저장한다.
+- fixture 비교는 기본적으로 공백과 문장부호를 제거한 normalized match를 사용한다.
+- KSS fixture는 `cc-by-nc-sa-4.0`이므로 비상업 실험용으로만 사용한다.
