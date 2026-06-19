@@ -7,17 +7,22 @@ import selectors
 import signal
 import subprocess
 import sys
+import termios
 import time
+import tty
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+DEFAULT_BACKEND = "stdin-repeat"
+DEFAULT_TRIGGER_KEY = "t"
 DEFAULT_TRIGGER_KEYCODE = 28
 DEFAULT_MODIFIER_KEYCODES = (64, 108, 204)
 DEFAULT_MAX_DURATION = 60.0
 DEFAULT_MIN_DURATION = 0.15
+DEFAULT_RELEASE_GAP = 0.75
 
 
 @dataclass(frozen=True)
@@ -131,6 +136,22 @@ class Recorder:
         self.started_at = None
 
 
+class TerminalInputMode:
+    def __init__(self) -> None:
+        self.fd = sys.stdin.fileno()
+        self.original_attrs: list[object] | None = None
+
+    def __enter__(self) -> int:
+        if sys.stdin.isatty():
+            self.original_attrs = termios.tcgetattr(self.fd)
+            tty.setcbreak(self.fd)
+        return self.fd
+
+    def __exit__(self, exc_type: object, exc_value: object, traceback: object) -> None:
+        if self.original_attrs is not None:
+            termios.tcsetattr(self.fd, termios.TCSADRAIN, self.original_attrs)
+
+
 def parse_keycodes(value: str) -> tuple[int, ...]:
     keycodes: list[int] = []
     for raw_part in value.split(","):
@@ -169,9 +190,27 @@ def positive_int(value: str) -> int:
     return parsed
 
 
+def single_character(value: str) -> str:
+    if len(value) != 1:
+        raise argparse.ArgumentTypeError("trigger key must be a single character")
+    return value
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Push-to-talk STT input helper using xinput key press/release events."
+        description="Push-to-talk STT input helper using terminal repeat input or xinput events."
+    )
+    parser.add_argument(
+        "--backend",
+        choices=("stdin-repeat", "xinput"),
+        default=os.environ.get("STT_PTT_BACKEND", DEFAULT_BACKEND),
+        help=f"Input backend. Default: {DEFAULT_BACKEND}",
+    )
+    parser.add_argument(
+        "--trigger-key",
+        type=single_character,
+        default=DEFAULT_TRIGGER_KEY,
+        help=f"Trigger key for stdin-repeat backend. Default: {DEFAULT_TRIGGER_KEY}",
     )
     parser.add_argument(
         "--keycode",
@@ -217,6 +256,12 @@ def parse_args() -> argparse.Namespace:
         help=f"Minimum accepted recording duration. Default: {DEFAULT_MIN_DURATION:g}s",
     )
     parser.add_argument(
+        "--release-gap",
+        type=positive_float,
+        default=DEFAULT_RELEASE_GAP,
+        help=f"Seconds without repeated trigger input before stdin-repeat stops recording. Default: {DEFAULT_RELEASE_GAP:g}s",
+    )
+    parser.add_argument(
         "--output-dir",
         default=os.environ.get("STT_OUTPUT_DIR", "output/recordings"),
         help="Recording output directory. Default: output/recordings",
@@ -253,6 +298,8 @@ def parse_args() -> argparse.Namespace:
     args = parser.parse_args()
     if args.transcribe_args and args.transcribe_args[0] == "--":
         args.transcribe_args = args.transcribe_args[1:]
+    if args.backend == "stdin-repeat" and not args.no_modifier:
+        parser.error("--require-modifier is only supported with --backend xinput")
     return args
 
 
@@ -288,7 +335,7 @@ def start_xinput() -> subprocess.Popen[str]:
         raise RuntimeError("xinput is required but was not found") from error
 
 
-def record_once(args: argparse.Namespace) -> Path:
+def record_once_xinput(args: argparse.Namespace) -> Path:
     xinput = start_xinput()
     if xinput.stdout is None:
         raise RuntimeError("failed to open xinput output")
@@ -373,6 +420,79 @@ def record_once(args: argparse.Namespace) -> Path:
     if recorder.elapsed() and recorder.elapsed() < args.min_duration:
         raise RuntimeError("recording too short")
     return recording_file
+
+
+def record_once_stdin_repeat(args: argparse.Namespace) -> Path:
+    selector = selectors.DefaultSelector()
+    recorder = Recorder(REPO_ROOT / args.output_dir)
+    listen_started_at = time.monotonic()
+    recording_file: Path | None = None
+    recording = False
+    last_trigger_at: float | None = None
+
+    print(
+        f"waiting: terminal-key={args.trigger_key} release_gap={args.release_gap:g}s",
+        file=sys.stderr,
+    )
+
+    try:
+        with TerminalInputMode() as fd:
+            selector.register(fd, selectors.EVENT_READ)
+            while True:
+                now = time.monotonic()
+                if args.listen_timeout and not recording:
+                    if now - listen_started_at > args.listen_timeout:
+                        raise RuntimeError("timed out waiting for push-to-talk hotkey")
+
+                if recording and recorder.elapsed() >= args.max_duration:
+                    print(f"max duration reached: {args.max_duration:g}s", file=sys.stderr)
+                    recording_file = recorder.stop()
+                    break
+
+                if recording and last_trigger_at is not None:
+                    if now - last_trigger_at >= args.release_gap:
+                        elapsed = recorder.elapsed()
+                        recording_file = recorder.stop()
+                        print(
+                            f"recording stopped: elapsed={elapsed:.2f}s file={recording_file}",
+                            file=sys.stderr,
+                        )
+                        if elapsed < args.min_duration:
+                            raise RuntimeError(
+                                f"recording too short: {elapsed:.2f}s < {args.min_duration:g}s"
+                            )
+                        return recording_file
+
+                events = selector.select(timeout=0.05)
+                if not events:
+                    continue
+
+                for key, _ in events:
+                    raw = os.read(key.fd, 1024)
+                    if not raw:
+                        raise RuntimeError("stdin stopped unexpectedly")
+                    chunk = raw.decode(errors="ignore")
+                    for character in chunk:
+                        if character != args.trigger_key:
+                            continue
+                        last_trigger_at = time.monotonic()
+                        if not recording:
+                            recording_file = recorder.start()
+                            recording = True
+                            print(f"recording started: {recording_file}", file=sys.stderr)
+    finally:
+        recorder.terminate()
+        selector.close()
+
+    if recording_file is None:
+        raise RuntimeError("recording did not complete")
+    return recording_file
+
+
+def record_once(args: argparse.Namespace) -> Path:
+    if args.backend == "xinput":
+        return record_once_xinput(args)
+    return record_once_stdin_repeat(args)
 
 
 def run_stt_clipboard(args: argparse.Namespace, recording_file: Path) -> int:

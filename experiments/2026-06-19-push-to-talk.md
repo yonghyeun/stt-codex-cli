@@ -5,6 +5,7 @@
 - 키를 누르면 녹음을 시작한다.
 - 키를 떼면 녹음을 종료한다.
 - 녹음된 WAV를 기존 `stt_clipboard.sh` 흐름으로 보낸다.
+- 기본 backend는 `stdin-repeat`다.
 - 기본 hotkey는 `t` 단독키다.
 - 사용자가 keycode와 modifier keycode를 바꿀 수 있다.
 
@@ -14,9 +15,10 @@
 
 ## Default Hotkey
 
-- Trigger: `t`, keycode `28`.
+- Terminal trigger: `t`.
+- XInput trigger: `t`, keycode `28`.
 - Modifier: 없음.
-- Alt 조합을 쓰려면 `--require-modifier --modifier-keycodes 64,108,204`를 지정한다.
+- Alt 조합을 쓰려면 `--backend xinput --require-modifier --modifier-keycodes 64,108,204`를 지정한다.
 
 확인 명령:
 
@@ -47,7 +49,7 @@ scripts/push_to_talk.py --keycode 74 --no-modifier --record-only
 Alt+T:
 
 ```bash
-scripts/push_to_talk.py --keycode 28 --require-modifier --modifier-keycodes 64,108,204 --record-only
+scripts/push_to_talk.py --backend xinput --keycode 28 --require-modifier --modifier-keycodes 64,108,204 --record-only
 ```
 
 ## Result
@@ -63,7 +65,8 @@ scripts/push_to_talk.py --keycode 28 --require-modifier --modifier-keycodes 64,1
 
 ## Decision
 
-- Phase 12는 XInput 기반 prototype으로 둔다.
+- Phase 12는 terminal `stdin-repeat` backend를 기본 prototype으로 둔다.
+- XInput backend는 선택 옵션으로 유지한다.
 - default는 `t` 단독키다.
 - keycode와 modifier keycode는 사용자 설정 가능하다.
 - STT 결과는 여전히 clipboard 복사까지만 수행한다.
@@ -76,6 +79,8 @@ scripts/push_to_talk.py --keycode 28 --require-modifier --modifier-keycodes 64,1
 - 일부 Wayland compositor 또는 app focus 상태에서는 전역 key event 감지가 제한될 수 있다.
 - XInput 방식은 key event를 감지할 뿐 입력을 grab하지 않는다.
 - terminal/tmux focus 상태에서는 `t` 문자가 같이 입력될 수 있다.
+- `stdin-repeat` 방식은 실제 key release event가 아니라 key repeat 중단 시간을 release로 추정한다.
+- terminal key repeat가 꺼져 있거나 반복 delay가 `--release-gap`보다 길면 조기 종료될 수 있다.
 
 ## Follow-up
 

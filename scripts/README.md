@@ -134,7 +134,9 @@ scripts/record_clipboard.sh --record-only --duration 1
 
 ## Prototype 12: Push to Talk
 
-기본 hotkey는 `t` 단독키다. 누르면 녹음이 시작되고, 떼면 녹음이 종료된다.
+기본 backend는 `stdin-repeat`다. 터미널이 받는 `t` 반복 입력을 이용한다.
+
+`t`를 누르면 녹음이 시작되고, `t` 반복 입력이 끊기면 녹음이 종료된다.
 
 ```bash
 scripts/push_to_talk.py -- --model large-v3 --device cuda --compute-type float16
@@ -155,11 +157,13 @@ scripts/push_to_talk.py --keycode 74 --no-modifier --record-only
 현재 기본값:
 
 - `t`: keycode `28`
+- terminal trigger key: `t`
+- release gap: `0.75s`
 
-`Alt+T`로 실행:
+XInput backend에서 `Alt+T`로 실행:
 
 ```bash
-scripts/push_to_talk.py --keycode 28 --require-modifier --modifier-keycodes 64,108,204 --record-only
+scripts/push_to_talk.py --backend xinput --keycode 28 --require-modifier --modifier-keycodes 64,108,204 --record-only
 ```
 
 Alt keycode:
@@ -174,11 +178,14 @@ keycode 확인:
 xmodmap -pke | grep -E 'Alt_L|Alt_R| t '
 ```
 
-- `--keycode`로 trigger keycode를 바꾼다.
-- 기본은 modifier 없이 trigger key만 누른다.
-- `--require-modifier`를 주면 modifier와 trigger key 조합을 요구한다.
-- `--modifier-keycodes 64,108`처럼 modifier keycode 목록을 바꾼다.
+- `--trigger-key`로 terminal trigger key를 바꾼다.
+- `--release-gap`으로 terminal key release 판정 시간을 바꾼다.
+- `--backend xinput`에서 `--keycode`로 trigger keycode를 바꾼다.
+- `--backend xinput`에서 기본은 modifier 없이 trigger key만 누른다.
+- `--backend xinput --require-modifier`를 주면 modifier와 trigger key 조합을 요구한다.
+- `--backend xinput --modifier-keycodes 64,108`처럼 modifier keycode 목록을 바꾼다.
 - `--max-duration`은 누른 채로 잊었을 때 녹음을 자동 종료하는 안전장치다.
+- `stdin-repeat` backend는 terminal focus와 key repeat 설정에 의존한다.
 - `xinput test-xi2 --root` 이벤트를 사용하므로 Wayland/Xwayland 환경에서는 동작 제약이 있을 수 있다.
 
 ## Prototype 1: Record Only
