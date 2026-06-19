@@ -50,6 +50,29 @@ scripts/recover_tokens.py --fixture fixtures/token-recovery-v1.json
 - 원문 transcript는 보존하고 복원본만 출력한다.
 - LLM, GPU, network는 사용하지 않는다.
 
+## Prototype 9: Clipboard Copy
+
+텍스트를 clipboard에 복사한다.
+
+```bash
+echo "README.md 수정해" | scripts/copy_text.sh
+```
+
+인자로 직접 전달할 수도 있다.
+
+```bash
+scripts/copy_text.sh "README.md 수정해"
+```
+
+- 기본 backend는 `auto`다.
+- 현재 Linux 기준 backend는 `xclip`이다.
+- Wayland 환경에서 `wl-copy`와 `wl-paste`가 있으면 `wl-copy` backend도 사용할 수 있다.
+- `--backend xclip`처럼 backend를 명시할 수 있다.
+- 기본적으로 복사 후 clipboard를 다시 읽어 검증한다.
+- `--no-verify`를 주면 복사 검증을 생략한다.
+- stdout에는 복사한 텍스트를 출력한다.
+- stderr에는 backend와 검증 여부를 출력한다.
+
 ## Prototype 1: Record Only
 
 ```bash
