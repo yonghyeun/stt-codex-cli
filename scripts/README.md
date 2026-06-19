@@ -7,6 +7,7 @@ STT 실행 스크립트 위치.
 - 짧은 마이크 녹음.
 - 로컬 STT 변환.
 - 결과를 클립보드에 복사.
+- 수동 memory 기반 token recovery.
 
 ## Setup
 
@@ -22,6 +23,32 @@ CUDA 실행이 필요하면 추가 설치한다.
 ```
 
 `scripts/transcribe.sh`는 venv에 설치된 CUDA library path를 자동으로 `LD_LIBRARY_PATH`에 추가한다.
+
+## Prototype 8: Manual Token Recovery
+
+수동 memory에 등록된 표현만 복원한다.
+
+```bash
+scripts/recover_tokens.py --memory memory/manual-aliases.example.json "리드미 수정해"
+```
+
+기대 출력:
+
+```text
+README.md 수정해
+```
+
+Fixture test:
+
+```bash
+scripts/recover_tokens.py --fixture fixtures/token-recovery-v1.json
+```
+
+- 기본 memory는 `memory/manual-aliases.json`이다.
+- 기본 memory가 없으면 `memory/manual-aliases.example.json`을 사용한다.
+- `STT_TOKEN_MEMORY`로 memory 파일을 지정할 수 있다.
+- 원문 transcript는 보존하고 복원본만 출력한다.
+- LLM, GPU, network는 사용하지 않는다.
 
 ## Prototype 1: Record Only
 

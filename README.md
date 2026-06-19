@@ -81,6 +81,8 @@ Linux에서 Codex CLI 입력을 보조하기 위한 로컬 STT 실험 workspace.
 
 원문 STT 결과는 항상 보존한다. 복원 확신이 낮으면 원문을 유지하거나 사용자 확인 대상으로 남긴다.
 
+Phase 8 prototype은 자동 수집 이전 단계다. `memory/manual-aliases.example.json` 같은 수동 memory를 읽어 텍스트 transcript를 복원한다.
+
 ## Closeout Criteria
 
 - Linux 데스크탑에서 한 명령 또는 한 단축키 흐름으로 실행 가능하다.
@@ -96,6 +98,7 @@ Linux에서 Codex CLI 입력을 보조하기 위한 로컬 STT 실험 workspace.
 ## Initial Shape
 
 - `scripts/`: 녹음, STT, 클립보드 복사 스크립트.
+- `memory/`: 수동 token recovery memory 예시와 계약.
 - `experiments/`: 모델, 녹음 방식, 단축키 UX 실험 기록.
 - `output/`: 로컬 실행 결과물. 기본적으로 Git 추적 제외.
 - `.github/ISSUE_TEMPLATE/`: repo task issue template.

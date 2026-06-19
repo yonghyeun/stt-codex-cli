@@ -1,0 +1,54 @@
+{
+  "version": 1,
+  "entries": [
+    {
+      "spoken": "리드미",
+      "target": "README.md",
+      "scope": "workspace",
+      "confidence": 0.99,
+      "source": "manual"
+    },
+    {
+      "spoken": "리드미 파일",
+      "target": "README.md",
+      "scope": "workspace",
+      "confidence": 0.99,
+      "source": "manual"
+    },
+    {
+      "spoken": "스크립트 트랜스크라이브 파이",
+      "target": "scripts/transcribe.py",
+      "scope": "workspace",
+      "confidence": 0.98,
+      "source": "manual"
+    },
+    {
+      "spoken": "트랜스크라이브 파이",
+      "target": "transcribe.py",
+      "scope": "workspace",
+      "confidence": 0.95,
+      "source": "manual"
+    },
+    {
+      "spoken": "이니셜 프롬프트",
+      "target": "--initial-prompt",
+      "scope": "workspace",
+      "confidence": 0.98,
+      "source": "manual"
+    },
+    {
+      "spoken": "컴퓨트 타입",
+      "target": "--compute-type",
+      "scope": "workspace",
+      "confidence": 0.98,
+      "source": "manual"
+    },
+    {
+      "spoken": "라지 브이 쓰리",
+      "target": "large-v3",
+      "scope": "workspace",
+      "confidence": 0.95,
+      "source": "manual"
+    }
+  ]
+}

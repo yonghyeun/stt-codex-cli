@@ -9,3 +9,4 @@ fixtures/generated/
 .venv/
 __pycache__/
 .pytest_cache/
+memory/*.local.json

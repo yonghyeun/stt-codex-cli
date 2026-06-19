@@ -1,0 +1,46 @@
+{
+  "id": "token-recovery-v1",
+  "memory": "memory/manual-aliases.example.json",
+  "cases": [
+    {
+      "label": "readme",
+      "input": "리드미 수정해",
+      "expected": "README.md 수정해"
+    },
+    {
+      "label": "readme_file_longer_alias_first",
+      "input": "리드미 파일 열어",
+      "expected": "README.md 열어"
+    },
+    {
+      "label": "script_path",
+      "input": "스크립트 트랜스크라이브 파이 열어",
+      "expected": "scripts/transcribe.py 열어"
+    },
+    {
+      "label": "option_with_space",
+      "input": "이니셜 프롬프트 옵션 추가해",
+      "expected": "--initial-prompt 옵션 추가해"
+    },
+    {
+      "label": "option_without_space",
+      "input": "이니셜프롬프트 옵션 추가해",
+      "expected": "--initial-prompt 옵션 추가해"
+    },
+    {
+      "label": "compute_type_option",
+      "input": "컴퓨트 타입 인자 검증해",
+      "expected": "--compute-type 인자 검증해"
+    },
+    {
+      "label": "model_name",
+      "input": "라지 브이 쓰리로 테스트해",
+      "expected": "large-v3로 테스트해"
+    },
+    {
+      "label": "general_korean_preserved",
+      "input": "그냥 세션 설명해",
+      "expected": "그냥 세션 설명해"
+    }
+  ]
+}

@@ -2,6 +2,17 @@
 
 재현 가능한 STT 검증용 로컬 fixture 위치.
 
+## Token Recovery Fixture
+
+```bash
+scripts/recover_tokens.py --fixture fixtures/token-recovery-v1.json
+```
+
+- Manifest: `fixtures/token-recovery-v1.json`
+- Memory: `memory/manual-aliases.example.json`
+- STT 없이 텍스트 입력만 검증한다.
+- 수동 memory 기반 token recovery가 기대 문자열을 만드는지 확인한다.
+
 ## Generated KSS Fixture
 
 ```bash
