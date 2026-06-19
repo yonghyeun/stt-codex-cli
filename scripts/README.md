@@ -103,6 +103,34 @@ scripts/stt_clipboard.sh \
 - `--no-recovery`를 주면 STT 결과를 그대로 복사한다.
 - 기본적으로 clipboard readback 검증을 수행한다.
 - `--no-copy-verify`를 주면 clipboard 검증을 생략한다.
+- STT 결과가 비어 있거나 punctuation-only이면 clipboard에 복사하지 않고 실패한다.
+
+## Prototype 11: Record to Clipboard
+
+마이크를 정해진 시간 녹음하고, STT 변환과 token recovery 후 clipboard에 복사한다.
+
+```bash
+scripts/record_clipboard.sh --duration 5 -- --model large-v3 --device cuda --compute-type float16
+```
+
+작은 CPU 모델로 짧게 테스트:
+
+```bash
+scripts/record_clipboard.sh --duration 3 -- --model tiny --device cpu --compute-type int8
+```
+
+녹음 파일 생성만 확인:
+
+```bash
+scripts/record_clipboard.sh --record-only --duration 1
+```
+
+- `--` 앞의 option은 record/clipboard wrapper가 처리한다.
+- `--` 뒤의 option은 `scripts/transcribe.sh`에 전달한다.
+- 기본 duration은 5초다.
+- 기본적으로 token recovery와 clipboard readback 검증을 수행한다.
+- 실제 발화가 없으면 STT 결과가 비어 실패할 수 있다.
+- 무발화 환각으로 punctuation-only 결과가 나오면 clipboard에 복사하지 않고 실패한다.
 
 ## Prototype 1: Record Only
 

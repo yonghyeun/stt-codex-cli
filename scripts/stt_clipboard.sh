@@ -155,11 +155,25 @@ write_text_file() {
   printf '%s\n' "$text" > "$path"
 }
 
+has_meaningful_text() {
+  python3 - "$1" <<'PY'
+import sys
+
+text = sys.argv[1]
+raise SystemExit(0 if any(character.isalnum() for character in text) else 1)
+PY
+}
+
 echo "step=transcribe audio=$audio_file" >&2
 transcript="$("$repo_root/scripts/transcribe.sh" "$audio_file" "${transcribe_args[@]}")"
 
 if [[ -z "$transcript" ]]; then
   echo "transcript is empty" >&2
+  exit 1
+fi
+
+if ! has_meaningful_text "$transcript"; then
+  echo "transcript has no meaningful text: $transcript" >&2
   exit 1
 fi
 
@@ -181,6 +195,11 @@ fi
 
 if [[ -z "$final_text" ]]; then
   echo "final text is empty" >&2
+  exit 1
+fi
+
+if ! has_meaningful_text "$final_text"; then
+  echo "final text has no meaningful text: $final_text" >&2
   exit 1
 fi
 

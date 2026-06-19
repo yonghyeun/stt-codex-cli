@@ -87,6 +87,8 @@ Phase 9 prototype은 텍스트를 clipboard에 복사한다. 현재 Linux 기준
 
 Phase 10 prototype은 기존 audio 파일을 STT로 변환하고, token recovery를 거쳐 clipboard에 복사한다.
 
+Phase 11 prototype은 정해진 시간 마이크를 녹음한 뒤 Phase 10 흐름으로 이어 clipboard에 복사한다. push-to-talk 입력 UX는 아직 후속 단계다.
+
 ## Closeout Criteria
 
 - Linux 데스크탑에서 한 명령 또는 한 단축키 흐름으로 실행 가능하다.
