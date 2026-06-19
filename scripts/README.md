@@ -132,6 +132,45 @@ scripts/record_clipboard.sh --record-only --duration 1
 - 실제 발화가 없으면 STT 결과가 비어 실패할 수 있다.
 - 무발화 환각으로 punctuation-only 결과가 나오면 clipboard에 복사하지 않고 실패한다.
 
+## Prototype 12: Push to Talk
+
+기본 hotkey는 `Alt+T`다. 누르면 녹음이 시작되고, 떼면 녹음이 종료된다.
+
+```bash
+scripts/push_to_talk.py -- --model large-v3 --device cuda --compute-type float16
+```
+
+녹음 파일 생성만 확인:
+
+```bash
+scripts/push_to_talk.py --record-only
+```
+
+사용자가 hotkey를 바꿀 수 있다.
+
+```bash
+scripts/push_to_talk.py --keycode 74 --no-modifier --record-only
+```
+
+현재 `Alt+T` 기본값:
+
+- `t`: keycode `28`
+- `Alt_L`: keycode `64`
+- `Alt_R`: keycode `108`
+- 추가 Alt mapping: keycode `204`
+
+keycode 확인:
+
+```bash
+xmodmap -pke | grep -E 'Alt_L|Alt_R| t '
+```
+
+- `--keycode`로 trigger keycode를 바꾼다.
+- `--modifier-keycodes 64,108`처럼 modifier keycode 목록을 바꾼다.
+- `--no-modifier`를 주면 modifier 없이 trigger key만 누른다.
+- `--max-duration`은 누른 채로 잊었을 때 녹음을 자동 종료하는 안전장치다.
+- `xinput test-xi2 --root` 이벤트를 사용하므로 Wayland/Xwayland 환경에서는 동작 제약이 있을 수 있다.
+
 ## Prototype 1: Record Only
 
 ```bash
