@@ -55,6 +55,13 @@ scripts/transcribe.sh fixtures/generated/kss-row-00000/audio.wav --model tiny --
 scripts/compare_transcript.py fixtures/generated/kss-row-00000/expected.txt output/transcripts/kss-row-00000-tiny.txt
 ```
 
+여러 한국어 fixture를 한 번에 검증한다.
+
+```bash
+scripts/fetch_kss_fixture.py --manifest fixtures/kss-ko-core-v1.json
+scripts/run_fixture_suite.sh fixtures/kss-ko-core-v1.json --model large-v3 --device cuda --compute-type float16
+```
+
 정확도 실험은 큰 모델을 우선한다.
 
 ```bash
@@ -75,4 +82,5 @@ scripts/transcribe.sh fixtures/generated/kss-row-00000/audio.wav --model large-v
 - 변환 결과는 stdout으로 출력한다.
 - `--output output/transcripts/example.txt`를 주면 텍스트 파일도 저장한다.
 - fixture 비교는 기본적으로 공백과 문장부호를 제거한 normalized match를 사용한다.
+- suite 검증은 단어 추가, 누락, 치환을 실패로 본다.
 - KSS fixture는 `cc-by-nc-sa-4.0`이므로 비상업 실험용으로만 사용한다.

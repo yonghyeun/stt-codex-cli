@@ -1,0 +1,45 @@
+{
+  "id": "kss-ko-core-v1",
+  "dataset": "Bingsu/KSS_Dataset",
+  "source_page": "https://huggingface.co/datasets/Bingsu/KSS_Dataset",
+  "license": "cc-by-nc-sa-4.0",
+  "split": "train",
+  "fixtures": [
+    {
+      "row_idx": 0,
+      "label": "medium_declarative",
+      "expected": "그는 괜찮은 척하려고 애쓰는 것 같았다.",
+      "reason": "baseline medium declarative sentence"
+    },
+    {
+      "row_idx": 16,
+      "label": "short_polite_imperative",
+      "expected": "자리에 앉으세요.",
+      "reason": "short polite command-like sentence"
+    },
+    {
+      "row_idx": 79,
+      "label": "long_declarative",
+      "expected": "부모가 저지르는 큰 실수 중 하나는 자기 아이를 다른 집 아이와 비교하는 것이다.",
+      "reason": "long declarative sentence"
+    },
+    {
+      "row_idx": 99,
+      "label": "negative_polite_imperative",
+      "expected": "침으로 편지 봉투에 우표를 붙이지 마세요.",
+      "reason": "negative polite command-like sentence"
+    },
+    {
+      "row_idx": 997,
+      "label": "short_urgent_imperative",
+      "expected": "걷지 말고 뛰어!",
+      "reason": "short urgent command-like sentence"
+    },
+    {
+      "row_idx": 1040,
+      "label": "question",
+      "expected": "여기에서 가까운 곳에 서점이 있나요?",
+      "reason": "question sentence"
+    }
+  ]
+}

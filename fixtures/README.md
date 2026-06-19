@@ -16,6 +16,20 @@ scripts/fetch_kss_fixture.py --row-idx 0
 
 `fixtures/generated/`는 Git 추적 제외다.
 
+## KSS Korean Core Suite
+
+```bash
+scripts/fetch_kss_fixture.py --manifest fixtures/kss-ko-core-v1.json
+scripts/run_fixture_suite.sh fixtures/kss-ko-core-v1.json --model large-v3 --device cuda --compute-type float16
+```
+
+- Manifest: `fixtures/kss-ko-core-v1.json`
+- Generated root: `fixtures/generated/kss-ko-core-v1/`
+- Result output: `output/suite/`
+- Pass 기준 기본값은 normalized match다.
+- 단어 추가, 누락, 치환은 실패로 본다.
+- 문장부호 차이는 기본 실패로 보지 않는다.
+
 ## Source
 
 - Dataset: `Bingsu/KSS_Dataset`
