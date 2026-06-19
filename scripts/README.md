@@ -212,8 +212,37 @@ scripts/stt_codex.py --cmd python3 -- -q
 - `--codex-alt-screen`을 주면 Codex 기본 alternate screen 동작을 유지한다.
 - `--quiet-parent`를 주면 parent status line을 숨긴다.
 - `--no-color`를 주면 parent status line 색상을 끈다.
-- 이 phase는 STT와 텍스트 삽입을 아직 수행하지 않는다.
+- 기본 injection key는 `ctrl+t`다.
+- `--inject-text`로 child PTY에 삽입할 고정 텍스트를 바꾼다.
+- `--inject-key`로 삽입 trigger key를 바꾼다.
+- `--disable-inject-key`를 주면 모든 stdin을 child PTY로 그대로 전달한다.
+- injection은 텍스트만 삽입하며 Enter는 보내지 않는다.
+- 이 phase는 STT를 아직 수행하지 않는다.
 - Codex CLI 자동 전송은 하지 않는다.
+
+## Prototype 14: Fixed Text Injection
+
+STT 연결 전에 parent가 child PTY 입력창에 텍스트를 삽입할 수 있는지 검증한다.
+
+```bash
+scripts/stt_codex.py
+```
+
+실행 후 `Ctrl+T`를 누르면 기본 문장이 Codex 입력창에 삽입된다.
+
+```text
+hello from stt wrapper
+```
+
+사용자는 내용을 확인한 뒤 직접 Enter를 누른다.
+
+검증용 child command:
+
+```bash
+scripts/stt_codex.py --cmd python3 -- -c 'import sys; print("child:" + sys.stdin.readline().strip())'
+```
+
+위 command에서 `Ctrl+T`를 누르고 Enter를 누르면 child가 삽입된 텍스트를 출력한다.
 
 ## Prototype 1: Record Only
 

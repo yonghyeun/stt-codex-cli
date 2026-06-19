@@ -15,6 +15,8 @@ from pathlib import Path
 
 
 DEFAULT_CMD = "codex"
+DEFAULT_INJECT_KEY = "ctrl+t"
+DEFAULT_INJECT_TEXT = "hello from stt wrapper"
 PARENT_PREFIX = "[stt-parent]"
 READ_SIZE = 4096
 
@@ -64,6 +66,21 @@ def parse_args() -> argparse.Namespace:
         help="Do not add --no-alt-screen when running Codex.",
     )
     parser.add_argument(
+        "--inject-key",
+        default=os.environ.get("STT_INJECT_KEY", DEFAULT_INJECT_KEY),
+        help=f"Key sequence that injects --inject-text. Default: {DEFAULT_INJECT_KEY}",
+    )
+    parser.add_argument(
+        "--inject-text",
+        default=os.environ.get("STT_INJECT_TEXT", DEFAULT_INJECT_TEXT),
+        help=f"Text to inject into the child PTY. Default: {DEFAULT_INJECT_TEXT!r}",
+    )
+    parser.add_argument(
+        "--disable-inject-key",
+        action="store_true",
+        help="Pass all stdin through without reserving an injection key.",
+    )
+    parser.add_argument(
         "cmd_args",
         nargs=argparse.REMAINDER,
         help="Arguments after -- are passed to the child command.",
@@ -73,7 +90,44 @@ def parse_args() -> argparse.Namespace:
         args.cmd_args = args.cmd_args[1:]
     if not args.cmd:
         parser.error("--cmd must not be empty")
+    if not args.inject_text:
+        parser.error("--inject-text must not be empty")
+    try:
+        args.inject_key_bytes = parse_key_sequence(args.inject_key)
+    except argparse.ArgumentTypeError as error:
+        parser.error(str(error))
     return args
+
+
+def parse_key_sequence(value: str) -> bytes:
+    normalized = value.strip().lower()
+    if not normalized:
+        raise argparse.ArgumentTypeError("--inject-key must not be empty")
+
+    named_keys = {
+        "tab": b"\t",
+        "esc": b"\x1b",
+        "escape": b"\x1b",
+        "space": b" ",
+        "enter": b"\r",
+    }
+    if normalized in named_keys:
+        return named_keys[normalized]
+
+    if normalized.startswith("ctrl+"):
+        key = normalized.removeprefix("ctrl+")
+        if len(key) != 1 or not ("a" <= key <= "z"):
+            raise argparse.ArgumentTypeError(
+                "ctrl key syntax must be ctrl+<a-z>, for example ctrl+t"
+            )
+        return bytes([ord(key) - ord("a") + 1])
+
+    if len(value) == 1:
+        return value.encode()
+
+    raise argparse.ArgumentTypeError(
+        "inject key must be a single character, named key, or ctrl+<a-z>"
+    )
 
 
 def is_codex_command(command: str) -> bool:
@@ -114,6 +168,11 @@ def parent_banner(args: argparse.Namespace, argv: list[str], cwd: str | None) ->
     display_cwd = cwd if cwd is not None else os.getcwd()
     parent_status(args, f"starting child: {format_command(argv)}")
     parent_status(args, f"cwd: {display_cwd}")
+    if not args.disable_inject_key:
+        parent_status(
+            args,
+            f"inject key: {args.inject_key} -> {len(args.inject_text)} chars; Enter still manual",
+        )
     parent_status(args, "child output follows")
     if sys.stderr.isatty() and not args.no_color:
         print("\033[36m" + ("-" * 48) + "\033[0m", file=sys.stderr, flush=True)
@@ -170,7 +229,32 @@ def reap_child(pid: int) -> int | None:
     return decode_wait_status(status)
 
 
-def passthrough(pid: int, child_fd: int) -> int:
+def write_or_inject(args: argparse.Namespace, child_fd: int, data: bytes) -> None:
+    if args.disable_inject_key:
+        os.write(child_fd, data)
+        return
+
+    trigger = args.inject_key_bytes
+    start = 0
+    while True:
+        index = data.find(trigger, start)
+        if index < 0:
+            if start < len(data):
+                os.write(child_fd, data[start:])
+            return
+
+        if index > start:
+            os.write(child_fd, data[start:index])
+
+        os.write(child_fd, args.inject_text.encode())
+        parent_status(
+            args,
+            f"injected {len(args.inject_text)} chars; review text, then press Enter to send",
+        )
+        start = index + len(trigger)
+
+
+def passthrough(args: argparse.Namespace, pid: int, child_fd: int) -> int:
     selector = selectors.DefaultSelector()
     selector.register(child_fd, selectors.EVENT_READ, "child")
     stdin_open = True
@@ -231,7 +315,7 @@ def passthrough(pid: int, child_fd: int) -> int:
                         selector.unregister(sys.stdin.fileno())
                         stdin_open = False
                         continue
-                    os.write(child_fd, data)
+                    write_or_inject(args, child_fd, data)
     finally:
         signal.signal(signal.SIGWINCH, previous_sigwinch)
         selector.close()
@@ -246,7 +330,7 @@ def main() -> int:
         pid, child_fd = spawn_child(argv, cwd)
         parent_status(args, f"child pid: {pid}")
         with TerminalMode():
-            exit_code = passthrough(pid, child_fd)
+            exit_code = passthrough(args, pid, child_fd)
         parent_status(args, f"child exited: {exit_code}")
         return exit_code
     except KeyboardInterrupt:
