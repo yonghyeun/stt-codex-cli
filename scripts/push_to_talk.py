@@ -183,12 +183,21 @@ def parse_args() -> argparse.Namespace:
         "--modifier-keycodes",
         type=parse_keycodes,
         default=DEFAULT_MODIFIER_KEYCODES,
-        help="Comma-separated modifier keycodes. Default: 64,108,204 (Alt keys)",
+        help="Comma-separated modifier keycodes for --require-modifier. Default: 64,108,204 (Alt keys)",
     )
-    parser.add_argument(
+    modifier_group = parser.add_mutually_exclusive_group()
+    parser.set_defaults(no_modifier=True)
+    modifier_group.add_argument(
         "--no-modifier",
+        dest="no_modifier",
         action="store_true",
-        help="Trigger on keycode alone without requiring a modifier.",
+        help="Trigger on keycode alone without requiring a modifier. Default.",
+    )
+    modifier_group.add_argument(
+        "--require-modifier",
+        dest="no_modifier",
+        action="store_false",
+        help="Require one of --modifier-keycodes with the trigger key.",
     )
     parser.add_argument(
         "--listen-timeout",
@@ -293,12 +302,15 @@ def record_once(args: argparse.Namespace) -> Path:
     recording = False
     recording_file: Path | None = None
 
-    print(
-        "waiting: hotkey="
-        f"{'keycode ' + str(args.keycode) if args.no_modifier else 'modifier+keycode ' + str(args.keycode)} "
-        f"modifier_keycodes={','.join(str(code) for code in args.modifier_keycodes)}",
-        file=sys.stderr,
-    )
+    if args.no_modifier:
+        print(f"waiting: hotkey=keycode {args.keycode}", file=sys.stderr)
+    else:
+        print(
+            "waiting: hotkey="
+            f"modifier+keycode {args.keycode} "
+            f"modifier_keycodes={','.join(str(code) for code in args.modifier_keycodes)}",
+            file=sys.stderr,
+        )
 
     try:
         while True:

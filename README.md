@@ -89,7 +89,7 @@ Phase 10 prototype은 기존 audio 파일을 STT로 변환하고, token recovery
 
 Phase 11 prototype은 정해진 시간 마이크를 녹음한 뒤 Phase 10 흐름으로 이어 clipboard에 복사한다. push-to-talk 입력 UX는 아직 후속 단계다.
 
-Phase 12 prototype은 `Alt+T` push-to-talk 입력을 추가한다. 사용자는 keycode와 modifier keycode를 바꿀 수 있다.
+Phase 12 prototype은 `t` 단독키 push-to-talk 입력을 추가한다. 사용자는 keycode와 modifier keycode를 바꿀 수 있다.
 
 ## Closeout Criteria
 
