@@ -37,3 +37,20 @@ scripts/run_fixture_suite.sh fixtures/kss-ko-core-v1.json --model large-v3 --dev
 - License: `cc-by-nc-sa-4.0`
 
 이 fixture는 비상업 실험용으로만 사용한다. 상업 사용 가능 fixture가 필요하면 CC0 또는 별도 사용 허가가 있는 데이터셋으로 교체한다.
+
+## HiKE Code-Switch Suite
+
+```bash
+scripts/fetch_hike_fixture.py --manifest fixtures/hike-code-switch-core-v1.json
+scripts/run_fixture_suite.sh fixtures/hike-code-switch-core-v1.json --model large-v3 --device cuda --compute-type float16 --require none
+scripts/analyze_code_switch_suite.py output/suite/hike-code-switch-core-v1-large-v3-cuda-float16.json
+```
+
+- Manifest: `fixtures/hike-code-switch-core-v1.json`
+- Generated root: `fixtures/generated/hike-code-switch-core-v1/`
+- Result output: `output/suite/`
+- Source: <https://huggingface.co/datasets/thetaone-ai/HiKE>
+- License: `apache-2.0`
+- Code-switching suite는 우선 측정용이다.
+- 통과 기준은 별도 실험 후 정한다.
+- 영어 기술 토큰 보존율을 별도로 확인한다.

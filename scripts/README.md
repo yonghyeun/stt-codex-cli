@@ -62,6 +62,14 @@ scripts/fetch_kss_fixture.py --manifest fixtures/kss-ko-core-v1.json
 scripts/run_fixture_suite.sh fixtures/kss-ko-core-v1.json --model large-v3 --device cuda --compute-type float16
 ```
 
+한영 혼합 fixture를 측정한다.
+
+```bash
+scripts/fetch_hike_fixture.py --manifest fixtures/hike-code-switch-core-v1.json
+scripts/run_fixture_suite.sh fixtures/hike-code-switch-core-v1.json --model large-v3 --device cuda --compute-type float16 --require none
+scripts/analyze_code_switch_suite.py output/suite/hike-code-switch-core-v1-large-v3-cuda-float16.json
+```
+
 정확도 실험은 큰 모델을 우선한다.
 
 ```bash

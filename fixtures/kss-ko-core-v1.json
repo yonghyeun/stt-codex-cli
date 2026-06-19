@@ -4,6 +4,7 @@
   "source_page": "https://huggingface.co/datasets/Bingsu/KSS_Dataset",
   "license": "cc-by-nc-sa-4.0",
   "split": "train",
+  "fixture_dir_prefix": "kss-row",
   "fixtures": [
     {
       "row_idx": 0,

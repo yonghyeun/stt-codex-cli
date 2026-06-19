@@ -1,0 +1,50 @@
+{
+  "id": "hike-code-switch-core-v1",
+  "dataset": "thetaone-ai/HiKE",
+  "source_page": "https://huggingface.co/datasets/thetaone-ai/HiKE",
+  "license": "apache-2.0",
+  "split": "test",
+  "fixture_dir_prefix": "hike-row",
+  "fixtures": [
+    {
+      "row_idx": 0,
+      "label": "software_bug_session_logic",
+      "expected": "이번 bug는 session management logic에 문제가 있었어",
+      "category": "software development",
+      "cs_level": "phrase",
+      "reason": "software bug report with English technical nouns"
+    },
+    {
+      "row_idx": 3,
+      "label": "software_sprint_gateway_migration",
+      "expected": "이번 sprint에서 api gateway migration 작업이 생각보다 complex해서 deadline을 못 맞출 것 같아",
+      "category": "software development",
+      "cs_level": "phrase",
+      "reason": "software project sentence with multiple English technical terms"
+    },
+    {
+      "row_idx": 8,
+      "label": "business_review_session",
+      "expected": "내일 client presentation이 있으니까 powerpoint slides 다시 한번 review해보고 qa session 준비도 해둬",
+      "category": "business",
+      "cs_level": "phrase",
+      "reason": "task-like sentence with review, slides, QA, session"
+    },
+    {
+      "row_idx": 13,
+      "label": "word_level_actually",
+      "expected": "actually가 들어가면 왜 좀 더 진지해지는 느낌이야",
+      "category": "language education",
+      "cs_level": "word",
+      "reason": "single English word attached to Korean particle"
+    },
+    {
+      "row_idx": 15,
+      "label": "software_database_schema",
+      "expected": "we need to update the database schema 특히 user table에 새로운 column 추가된 거 반영해야 해",
+      "category": "software development",
+      "cs_level": "phrase",
+      "reason": "closest sample to Codex CLI engineering command language"
+    }
+  ]
+}

@@ -75,8 +75,8 @@ def load_manifest(path: str) -> dict:
     return json.loads(Path(path).read_text(encoding="utf-8"))
 
 
-def fixture_dir(fixture_root: Path, row_idx: int) -> Path:
-    return fixture_root / f"kss-row-{row_idx:05d}"
+def fixture_dir(fixture_root: Path, prefix: str, row_idx: int) -> Path:
+    return fixture_root / f"{prefix}-{row_idx:05d}"
 
 
 def transcribe_audio(model: WhisperModel, audio_file: Path, args: argparse.Namespace) -> tuple[str, float]:
@@ -98,10 +98,17 @@ def result_ok(result: dict, required: str) -> bool:
     return bool(result[f"{required}_match"])
 
 
+def result_status(result: dict, required: str) -> str:
+    if required == "none":
+        return "MEASURE"
+    return "PASS" if result_ok(result, required) else "FAIL"
+
+
 def main() -> int:
     args = parse_args()
     manifest = load_manifest(args.manifest)
     suite_id = manifest["id"]
+    prefix = manifest.get("fixture_dir_prefix", "kss-row")
     fixture_root = Path(args.fixture_root or f"fixtures/generated/{suite_id}")
 
     device = resolve_device(args.device)
@@ -127,7 +134,7 @@ def main() -> int:
     results = []
     for fixture in manifest["fixtures"]:
         row_idx = int(fixture["row_idx"])
-        directory = fixture_dir(fixture_root, row_idx)
+        directory = fixture_dir(fixture_root, prefix, row_idx)
         audio_file = directory / "audio.wav"
         expected_file = directory / "expected.txt"
         if not audio_file.exists() or not expected_file.exists():
@@ -142,6 +149,8 @@ def main() -> int:
         result = {
             "row_idx": row_idx,
             "label": fixture["label"],
+            "category": fixture.get("category"),
+            "cs_level": fixture.get("cs_level"),
             "expected": expected,
             "actual": actual,
             "exact_match": exact_match,
@@ -149,7 +158,7 @@ def main() -> int:
             "elapsed": round(elapsed, 3),
         }
         results.append(result)
-        status = "PASS" if result_ok(result, args.require) else "FAIL"
+        status = result_status(result, args.require)
         print(
             f"{status} row={row_idx:05d} exact={exact_match} normalized={normalized_match} elapsed={elapsed:.2f}s"
         )
