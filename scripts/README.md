@@ -15,6 +15,14 @@ python3 -m venv .venv
 .venv/bin/pip install -r requirements.txt
 ```
 
+CUDA 실행이 필요하면 추가 설치한다.
+
+```bash
+.venv/bin/pip install -r requirements-cuda.txt
+```
+
+`scripts/transcribe.sh`는 venv에 설치된 CUDA library path를 자동으로 `LD_LIBRARY_PATH`에 추가한다.
+
 ## Prototype 1: Record Only
 
 ```bash
@@ -51,6 +59,12 @@ scripts/compare_transcript.py fixtures/generated/kss-row-00000/expected.txt outp
 
 ```bash
 scripts/transcribe.sh fixtures/generated/kss-row-00000/audio.wav --model large-v3
+```
+
+CUDA를 명시하려면 다음처럼 실행한다.
+
+```bash
+scripts/transcribe.sh fixtures/generated/kss-row-00000/audio.wav --model large-v3 --device cuda --compute-type float16
 ```
 
 - 기본 모델은 정확도 우선 기준에 맞춰 `large-v3`다.

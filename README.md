@@ -53,6 +53,7 @@ Linux에서 Codex CLI 입력을 보조하기 위한 로컬 STT 실험 workspace.
 - Python: 3.12.3.
 - 로컬 STT 런타임: `.venv`에 `faster-whisper==1.2.1` 설치 확인.
 - 로컬 STT 모델: 초기 조사 시 Whisper/Hugging Face/faster-whisper/whisperx 캐시 또는 설치본 없음. Prototype 2 smoke test로 `Systran/faster-whisper-tiny` 다운로드 확인.
+- 정확도 기준 모델: `large-v3` CUDA `float16` 실행 확인. CUDA 실행에는 `requirements-cuda.txt` 설치 필요.
 
 첫 프로토타입은 녹음 파일 생성까지만 다룬다. 누르고 말하기 UX는 녹음 안정성 확인 후 별도 프로토타입에서 다룬다.
 
