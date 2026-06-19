@@ -53,4 +53,6 @@ scripts/analyze_code_switch_suite.py output/suite/hike-code-switch-core-v1-large
 - License: `apache-2.0`
 - Code-switching suite는 우선 측정용이다.
 - 통과 기준은 별도 실험 후 정한다.
-- 영어 기술 토큰 보존율을 별도로 확인한다.
+- Latin-script token 보존율을 별도로 확인한다.
+- 외래어의 한글 표기는 일반 한국어 입력에서는 자연스러울 수 있다.
+- 파일명, 옵션명, 코드 식별자 문맥에서는 별도 token recovery 기준이 필요하다.

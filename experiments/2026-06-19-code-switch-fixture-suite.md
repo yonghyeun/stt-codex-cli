@@ -3,7 +3,7 @@
 ## Scope
 
 - 한영 혼합 실제 음성 fixture suite를 추가한다.
-- Codex CLI 사용에 중요한 영어 기술 토큰 보존 여부를 측정한다.
+- Codex CLI 사용에 중요한 Latin-script token 보존 여부를 측정한다.
 - 이 phase는 pass/fail 기준 확정보다 baseline 측정이 목적이다.
 
 ## Source
@@ -55,27 +55,28 @@ scripts/analyze_code_switch_suite.py output/suite/hike-code-switch-core-v1-large
 - Rows: 5.
 - Exact pass: 0/5.
 - Normalized pass: 0/5.
-- English token preservation: 14/28, 50%.
+- Latin-script token preservation: 14/28, 50%.
 - `language=ko` and `language=auto` produced the same transcripts.
 
 ## Observations
 
-| row | expected English tokens | preserved | issue |
+| row | expected Latin tokens | preserved | issue |
 | --- | --- | --- | --- |
-| 0 | 4 | 0 | `bug`, `session`, `management`, `logic`이 한글 음차로 변환됨 |
+| 0 | 4 | 0 | `bug`, `session`, `management`, `logic`이 자연스러운 한글 외래어 표기로 변환됨 |
 | 3 | 6 | 4 | `sprint`, `complex`가 한글 음차로 변환됨 |
-| 8 | 7 | 0 | 전체 영어 업무 토큰이 한글 음차로 변환됨 |
+| 8 | 7 | 0 | 전체 업무 토큰이 한글 외래어 표기로 변환됨 |
 | 13 | 1 | 0 | `actually`가 한글 음차로 변환됨 |
 | 15 | 10 | 10 | 영어 토큰은 보존됐지만 한국어 `거`가 `것`으로 변환됨 |
 
 ## Decision
 
-- `large-v3`는 한국어 단일 언어 fixture에는 강하지만, 한영 혼합에서는 영어 기술 토큰을 한글 음차로 바꾸는 경향이 있다.
-- Codex CLI 입력 보조 도구에서는 영어 토큰 보존이 중요하므로 현재 code-switching 결과를 통과 기준으로 볼 수 없다.
+- `large-v3`는 한국어 단일 언어 fixture에는 강하지만, 한영 혼합에서는 영어권 단어를 자연스러운 한글 외래어 표기로 바꾸는 경향이 있다.
+- 일반 입력에서는 이 동작이 틀렸다고 볼 수 없다.
+- Codex CLI 입력 보조 도구에서는 파일명, 옵션명, 코드 식별자 같은 Latin-script token 보존이 중요하므로 별도 token recovery 기준이 필요하다.
 - HiKE suite는 regression pass suite가 아니라 accuracy risk measurement suite로 둔다.
 
 ## Follow-up
 
-- `initial_prompt` 또는 prompt 옵션으로 영어 기술 토큰 보존이 개선되는지 실험한다.
+- `initial_prompt` 또는 prompt 옵션으로 Latin-script token 보존이 개선되는지 실험한다.
 - 자주 쓰는 개발 용어 glossary 기반 후처리 가능성을 검토한다.
 - 사용자가 Codex CLI에 말할 실제 문장에 가까운 자체 녹음 fixture가 필요하다.

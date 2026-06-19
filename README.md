@@ -20,6 +20,8 @@ Linux에서 Codex CLI 입력을 보조하기 위한 로컬 STT 실험 workspace.
 
 사용자는 복사된 텍스트를 Codex CLI에 직접 붙여넣고, 오인식 여부를 확인한 뒤 전송한다.
 
+이 도구는 repo 전용 도구가 아니라 일반 Linux 데스크탑 입력 보조 도구다. Codex CLI나 repo 작업 중에는 선택적으로 workspace context를 사용해 파일명, 옵션명, 코드 식별자 같은 토큰을 복원한다.
+
 ## Priority
 
 1. 정확도.
@@ -54,7 +56,7 @@ Linux에서 Codex CLI 입력을 보조하기 위한 로컬 STT 실험 workspace.
 - 로컬 STT 런타임: `.venv`에 `faster-whisper==1.2.1` 설치 확인.
 - 로컬 STT 모델: 초기 조사 시 Whisper/Hugging Face/faster-whisper/whisperx 캐시 또는 설치본 없음. Prototype 2 smoke test로 `Systran/faster-whisper-tiny` 다운로드 확인.
 - 정확도 기준 모델: `large-v3` CUDA `float16` 실행 확인. CUDA 실행에는 `requirements-cuda.txt` 설치 필요.
-- 한영 혼합 기준: HiKE code-switching suite에서 영어 기술 토큰 보존율 50% 확인. 영어 토큰 음차 변환 리스크가 있어 별도 개선 phase 필요.
+- 한영 혼합 기준: HiKE code-switching suite에서 Latin-script token 보존율 50% 확인. 일반 문장의 외래어 표기 전환은 자연스러울 수 있으나, 파일명/옵션명/코드 식별자 문맥에서는 별도 복원 phase 필요.
 
 첫 프로토타입은 녹음 파일 생성까지만 다룬다. 누르고 말하기 UX는 녹음 안정성 확인 후 별도 프로토타입에서 다룬다.
 
@@ -64,11 +66,20 @@ Linux에서 Codex CLI 입력을 보조하기 위한 로컬 STT 실험 workspace.
 2. 로컬 STT 모델 후보를 하나 붙여 텍스트 변환을 확인한다.
 3. 정답 transcript가 있는 fixture WAV로 재현 가능한 변환 실험을 만든다.
 4. 한국어와 한영 혼합 문장의 정확도 실험을 기록한다.
-5. 변환 결과를 클립보드에 복사한다.
-6. 누르고 말하기 방식의 입력 UX를 만든다.
-7. 녹음, STT, 클립보드 복사를 하나의 명령으로 묶는다.
-8. 실제 Codex CLI 입력 흐름에서 반복 사용성을 검증한다.
-9. 정확도, 오인식 사례, 처리 시간을 기준으로 모델과 UX를 조정한다.
+5. 일반 입력과 workspace 입력의 mode 계약을 분리한다.
+6. 변환 결과를 클립보드에 복사한다.
+7. 누르고 말하기 방식의 입력 UX를 만든다.
+8. 녹음, STT, 클립보드 복사를 하나의 명령으로 묶는다.
+9. 실제 Codex CLI 입력 흐름에서 반복 사용성을 검증한다.
+10. 정확도, 오인식 사례, 처리 시간을 기준으로 모델과 UX를 조정한다.
+
+## Input Modes
+
+- General mode: repo context 없이 STT 결과를 최대한 그대로 둔다. 기본 mode다.
+- Workspace mode: 현재 디렉터리에서 파일명, 디렉터리명, 스크립트명, CLI 옵션명, 코드 식별자 후보를 자동 수집하고 확신 높은 경우만 복원한다.
+- Personal vocabulary mode: 사용자가 자주 쓰는 단어와 프로젝트명을 선택적으로 추가한다.
+
+원문 STT 결과는 항상 보존한다. 복원 확신이 낮으면 원문을 유지하거나 사용자 확인 대상으로 남긴다.
 
 ## Closeout Criteria
 
@@ -80,6 +91,7 @@ Linux에서 Codex CLI 입력을 보조하기 위한 로컬 STT 실험 workspace.
 - 한국어와 한영 혼합 명령의 실험 결과가 `experiments/`에 기록되어 있다.
 - 알려진 오인식 사례와 회피 방법이 문서화되어 있다.
 - 자동 전송 없이 사용자의 확인 단계를 유지한다.
+- 일반 입력 mode와 workspace 보정 mode가 분리되어 있다.
 
 ## Initial Shape
 

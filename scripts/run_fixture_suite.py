@@ -10,7 +10,14 @@ from pathlib import Path
 
 from compare_transcript import normalize
 from faster_whisper import WhisperModel
-from transcribe import DEFAULT_LANGUAGE, DEFAULT_MODEL, language_arg, resolve_compute_type, resolve_device
+from transcribe import (
+    DEFAULT_LANGUAGE,
+    DEFAULT_MODEL,
+    initial_prompt_arg,
+    language_arg,
+    resolve_compute_type,
+    resolve_device,
+)
 
 
 def slug(value: str) -> str:
@@ -54,6 +61,11 @@ def parse_args() -> argparse.Namespace:
         help="Beam size for decoding. Default: 5",
     )
     parser.add_argument(
+        "--initial-prompt",
+        default=os.environ.get("STT_INITIAL_PROMPT"),
+        help="Optional prompt text to guide transcription. Env: STT_INITIAL_PROMPT",
+    )
+    parser.add_argument(
         "--model-dir",
         default=os.environ.get("STT_MODEL_DIR"),
         help="Optional model download/cache directory.",
@@ -85,6 +97,7 @@ def transcribe_audio(model: WhisperModel, audio_file: Path, args: argparse.Names
         str(audio_file),
         language=language_arg(args.language),
         beam_size=args.beam_size,
+        initial_prompt=initial_prompt_arg(args.initial_prompt),
         vad_filter=True,
         condition_on_previous_text=False,
     )
@@ -113,14 +126,17 @@ def main() -> int:
 
     device = resolve_device(args.device)
     compute_type = resolve_compute_type(device, args.compute_type)
+    prompt = initial_prompt_arg(args.initial_prompt)
+    prompt_suffix = "-prompt" if prompt else ""
     output_path = Path(
         args.output
-        or f"output/suite/{suite_id}-{slug(args.model)}-{device}-{compute_type}.json"
+        or f"output/suite/{suite_id}-{slug(args.model)}-{device}-{compute_type}{prompt_suffix}.json"
     )
 
     print(
         "loading model: "
-        f"model={args.model} device={device} compute_type={compute_type}",
+        f"model={args.model} device={device} compute_type={compute_type} "
+        f"initial_prompt={'set' if prompt else 'unset'}",
         flush=True,
     )
     model = WhisperModel(
@@ -167,8 +183,10 @@ def main() -> int:
         "suite_id": suite_id,
         "manifest": args.manifest,
         "model": args.model,
+        "language": args.language,
         "device": device,
         "compute_type": compute_type,
+        "initial_prompt": prompt,
         "required_match": args.require,
         "elapsed": round(time.monotonic() - suite_started_at, 3),
         "total": len(results),

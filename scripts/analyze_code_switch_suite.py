@@ -16,7 +16,7 @@ def ascii_tokens(text: str) -> list[str]:
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Analyze English token preservation in a code-switching suite result."
+        description="Analyze Latin-script token preservation in a code-switching suite result."
     )
     parser.add_argument("suite_result", help="JSON result from scripts/run_fixture_suite.sh.")
     parser.add_argument(
@@ -59,11 +59,13 @@ def main() -> int:
     summary = {
         "suite_id": suite["suite_id"],
         "model": suite["model"],
+        "language": suite.get("language"),
         "device": suite["device"],
         "compute_type": suite["compute_type"],
+        "initial_prompt": suite.get("initial_prompt"),
         "rows": len(rows),
-        "expected_english_tokens": expected_total,
-        "preserved_english_tokens": preserved_total,
+        "expected_latin_tokens": expected_total,
+        "preserved_latin_tokens": preserved_total,
         "preservation_rate": round(
             preserved_total / expected_total if expected_total else 1.0,
             4,
@@ -77,8 +79,8 @@ def main() -> int:
             "missing={missing_tokens}".format(**row)
         )
     print(
-        "english_token_preservation="
-        f"{summary['preserved_english_tokens']}/{summary['expected_english_tokens']} "
+        "latin_token_preservation="
+        f"{summary['preserved_latin_tokens']}/{summary['expected_latin_tokens']} "
         f"({summary['preservation_rate']:.2%})"
     )
 

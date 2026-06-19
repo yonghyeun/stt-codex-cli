@@ -55,6 +55,11 @@ def parse_args() -> argparse.Namespace:
         help="Beam size for decoding. Default: 5",
     )
     parser.add_argument(
+        "--initial-prompt",
+        default=os.environ.get("STT_INITIAL_PROMPT"),
+        help="Optional prompt text to guide transcription. Env: STT_INITIAL_PROMPT",
+    )
+    parser.add_argument(
         "--model-dir",
         default=os.environ.get("STT_MODEL_DIR"),
         help="Optional model download/cache directory.",
@@ -97,6 +102,13 @@ def language_arg(language: str) -> str | None:
     return None if language == "auto" else language
 
 
+def initial_prompt_arg(initial_prompt: str | None) -> str | None:
+    if initial_prompt is None:
+        return None
+    prompt = initial_prompt.strip()
+    return prompt or None
+
+
 def main() -> int:
     args = parse_args()
     audio_file = Path(args.audio_file)
@@ -125,6 +137,7 @@ def main() -> int:
         str(audio_file),
         language=language_arg(args.language),
         beam_size=args.beam_size,
+        initial_prompt=initial_prompt_arg(args.initial_prompt),
         vad_filter=args.vad_filter,
         condition_on_previous_text=False,
     )
