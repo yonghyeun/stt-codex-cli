@@ -22,7 +22,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_CMD = "codex"
 DEFAULT_INJECT_MODE = "stt"
 DEFAULT_FIXED_INJECT_KEY = "ctrl+t"
-DEFAULT_STT_INJECT_KEY = "t"
+DEFAULT_STT_INJECT_KEY = "ctrl+t"
 DEFAULT_INJECT_TEXT = "hello from stt wrapper"
 DEFAULT_RELEASE_GAP = 0.75
 DEFAULT_MAX_DURATION = 60.0
@@ -100,7 +100,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--inject-key",
         default=os.environ.get("STT_INJECT_KEY"),
-        help="Key sequence that triggers injection. Default: t for stt, ctrl+t for fixed-text.",
+        help="Key sequence that triggers injection. Default: ctrl+t.",
     )
     parser.add_argument(
         "--inject-text",

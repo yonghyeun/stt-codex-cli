@@ -213,7 +213,7 @@ scripts/stt_codex.py --cmd python3 -- -q
 - `--quiet-parent`를 주면 parent status line을 숨긴다.
 - `--no-color`를 주면 parent status line 색상을 끈다.
 - 기본 injection mode는 `stt`다.
-- `stt` mode의 기본 injection key는 `t`다.
+- `stt` mode의 기본 injection key는 `ctrl+t`다.
 - `fixed-text` mode의 기본 injection key는 `ctrl+t`다.
 - `--inject-mode fixed-text`로 고정 텍스트 injection을 테스트할 수 있다.
 - `--inject-text`로 child PTY에 삽입할 고정 텍스트를 바꾼다.
@@ -248,7 +248,7 @@ scripts/stt_codex.py --inject-mode fixed-text --cmd python3 -- -c 'import sys; p
 
 ## Prototype 15: STT Transcript Injection
 
-기본 mode다. `t`를 누르고 말하면 녹음하고, `t` 반복 입력이 끊긴 뒤 STT raw transcript를 child PTY 입력창에 삽입한다.
+기본 mode다. `Ctrl+T`를 누르고 말하면 녹음하고, `Ctrl+T` 반복 입력이 끊긴 뒤 STT raw transcript를 child PTY 입력창에 삽입한다.
 
 ```bash
 scripts/stt_codex.py
@@ -266,9 +266,9 @@ scripts/stt_codex.py --stt-model large-v3 --stt-device cuda --stt-compute-type f
 scripts/stt_codex.py --stt-model tiny --stt-device cpu --stt-compute-type int8 --cmd python3 -- -q
 ```
 
-- STT mode 기본 trigger는 `t`다.
-- `t`는 child PTY로 전달되지 않고 parent가 소비한다.
-- `--inject-key ctrl+t`처럼 trigger를 바꿀 수 있다.
+- STT mode 기본 trigger는 `ctrl+t`다.
+- `ctrl+t`는 child PTY로 전달되지 않고 parent가 소비한다.
+- `--inject-key t`처럼 trigger를 바꿀 수 있다.
 - `--release-gap`은 trigger 반복 입력이 끊긴 뒤 녹음을 종료할 때까지 기다리는 시간이다.
 - `--min-duration`보다 짧은 녹음은 STT 없이 버린다.
 - `--max-duration`을 넘으면 자동으로 녹음을 종료한다.

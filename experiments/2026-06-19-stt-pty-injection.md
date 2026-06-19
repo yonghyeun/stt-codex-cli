@@ -15,7 +15,7 @@
 ## Behavior
 
 - 기본 injection mode는 `stt`다.
-- 기본 trigger는 `t`다.
+- 기본 trigger는 `ctrl+t`다.
 - trigger 반복 입력이 시작되면 recording을 시작한다.
 - trigger 반복 입력이 `--release-gap` 동안 끊기면 recording을 종료한다.
 - recording이 `--min-duration`보다 짧으면 STT 없이 버린다.
@@ -48,8 +48,8 @@ scripts/stt_codex.py --stt-model tiny --stt-device cpu --stt-compute-type int8 -
 ## Decision
 
 - STT mode를 기본 mode로 둔다.
-- STT mode의 기본 trigger는 사용자가 이미 검증한 `t`다.
-- `t`는 child PTY로 전달하지 않고 parent가 소비한다.
+- STT mode의 기본 trigger는 `ctrl+t`다.
+- `ctrl+t`는 child PTY로 전달하지 않고 parent가 소비한다.
 - fixed-text injection은 `--inject-mode fixed-text`로 유지한다.
 - 자동 전송은 하지 않는다.
 - token recovery는 후속 기능으로 둔다.
@@ -71,6 +71,6 @@ scripts/stt_codex.py --stt-model tiny --stt-device cpu --stt-compute-type int8 -
 
 ## Risk
 
-- `t`를 trigger로 쓰는 동안 child PTY에 일반 문자 `t`를 입력할 수 없다.
+- `ctrl+t`가 terminal/tmux 설정과 충돌할 수 있다.
 - terminal key repeat가 꺼져 있으면 release 추정이 빨리 끝날 수 있다.
 - STT 수행 중 wrapper event loop가 잠시 block된다.
