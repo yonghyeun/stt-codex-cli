@@ -1,6 +1,8 @@
 import { analyzeCodeSwitchSuite } from "@/features/code-switch-analysis";
 import { asRecord, readJsonFile, writeJsonFile } from "@/shared/json";
 
+import { isDirectRun } from "./shared/direct-run";
+
 interface ParsedArgs {
   suiteResult: string;
   output?: string;
@@ -90,4 +92,6 @@ function usage(): string {
   return "Usage: npm run analyze-code-switch-suite -- [--output PATH] suite_result.json";
 }
 
-process.exitCode = await main();
+if (isDirectRun(import.meta.url)) {
+  process.exitCode = await main();
+}

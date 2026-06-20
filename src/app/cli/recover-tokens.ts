@@ -5,6 +5,8 @@ import { parseMemoryEntries, recoverText } from "@/features/token-recovery";
 import { readJsonFile } from "@/shared/json";
 import { repoRoot } from "@/shared/repo";
 
+import { isDirectRun } from "./shared/direct-run";
+
 const DEFAULT_MEMORY = "memory/manual-aliases.json";
 const FALLBACK_MEMORY = "memory/manual-aliases.example.json";
 const DEFAULT_MIN_CONFIDENCE = 0.8;
@@ -272,4 +274,6 @@ function formatError(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-process.exitCode = await main();
+if (isDirectRun(import.meta.url)) {
+  process.exitCode = await main();
+}

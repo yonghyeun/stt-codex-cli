@@ -2,6 +2,8 @@ import { readFile } from "node:fs/promises";
 
 import { compareTranscripts } from "@/features/transcript-comparison";
 
+import { isDirectRun } from "./shared/direct-run";
+
 interface ParsedArgs {
   expectedFile: string;
   actualFile: string;
@@ -119,4 +121,6 @@ function formatError(error: unknown): string {
   return String(error);
 }
 
-process.exitCode = await main();
+if (isDirectRun(import.meta.url)) {
+  process.exitCode = await main();
+}
