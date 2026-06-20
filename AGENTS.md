@@ -18,6 +18,8 @@
 | `.codex/**` | `.codex/AGENTS.md` | repo-local skill과 task 계약 규칙 |
 | `.github/**` | `.github/README.md` | issue/PR template 규칙 |
 | `scripts/**` | `README.md` | STT 실행 스크립트 경계 |
+| `src/**` | `src/README.md` | TypeScript source layout와 포팅 계약 |
+| `docs/**` | `docs/README.md` | 장기 계약 문서와 설계 기록 경계 |
 | `experiments/**` | `README.md` | 실험 기록 경계 |
 | `output/**` | `README.md` | 로컬 산출물 경계 |
 
