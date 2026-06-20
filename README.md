@@ -208,8 +208,11 @@ npm run run-fixture-suite -- fixtures/kss-ko-core-v1.json --model large-v3 --dev
 
 현재 기준 결과:
 
-- Node STT engine 전환 후 재측정 필요.
-- 현재 worktree에는 `fixtures/generated/` audio가 없어 즉시 재실행하지 않았다.
+- `large-v3` CPU: PASS 6/6 normalized, exact 5/6.
+- elapsed: 166.698s.
+- output: `output/suite/kss-ko-core-v1-large-v3-cpu.json`.
+- `tiny` CPU 비교: normalized 2/6, exact 1/6.
+- output: `output/suite/kss-ko-core-v1-tiny-cpu.json`.
 
 한영 혼합 accuracy risk 측정:
 
