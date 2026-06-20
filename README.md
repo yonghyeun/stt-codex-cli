@@ -80,6 +80,51 @@ Current core scripts:
 - `scripts/run_fixture_suite.sh`, `scripts/run_fixture_suite.py`: fixture regression을 담당한다.
 - `scripts/record.sh`, `scripts/push_to_talk.py`, `scripts/stt_clipboard.sh`, `scripts/record_clipboard.sh`, `scripts/copy_text.sh`: 이전 prototype 또는 보조 흐름이다.
 
+Current architecture status:
+
+- 현재 source tree는 `scripts/**` 중심의 pre-migration 상태다.
+- `stt_core/`, `stt_runtime/`, `stt_features/`는 target mini-layer contract를 먼저 고정하기 위한 문서 surface다.
+- 현재 존재하는 문서 폴더가 곧 runtime code 이동 완료를 의미하지 않는다.
+- 실제 함수와 파일 이동은 별도 migration issue에서 behavior-preserving refactor로 진행한다.
+
+Target mini-layer architecture:
+
+```text
+terminal
+  -> scripts/stt_codex.py thin CLI entrypoint
+    -> stt_features: user-facing flow
+      -> stt_runtime: OS/process/PTY/file adapters
+      -> stt_core: pure policy and data contract
+```
+
+Layer ownership:
+
+- `scripts/`: 사용자가 실행하는 command surface, CLI option, backward-compatible entrypoint.
+- `stt_core/`: 실행환경과 무관한 순수 판단, data contract, deterministic transformation.
+- `stt_runtime/`: `arecord`, `transcribe.sh`, child PTY, terminal mode, filesystem write 같은 side-effect adapter.
+- `stt_features/`: recording, STT, transcript injection, optional artifact save를 조합하는 use-case flow.
+
+Allowed dependency direction:
+
+```text
+scripts -> stt_features
+scripts -> stt_runtime
+scripts -> stt_core
+stt_features -> stt_runtime
+stt_features -> stt_core
+stt_runtime -> stt_core
+stt_core -> nothing in this repo
+```
+
+Forbidden dependency direction:
+
+- `stt_core -> stt_runtime`
+- `stt_core -> stt_features`
+- `stt_core -> scripts`
+- `stt_runtime -> stt_features`
+- `stt_runtime -> scripts`
+- `stt_features -> scripts`
+
 Deferred architecture:
 
 - token recovery는 기본 흐름에서 제외한다.
