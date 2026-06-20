@@ -1,5 +1,6 @@
 import { existsSync } from "node:fs";
-import { join } from "node:path";
+import { basename, dirname, isAbsolute, join, resolve } from "node:path";
+import { spawnSync } from "node:child_process";
 
 import { runCommand } from "@/shared/process";
 import { repoRoot } from "@/shared/repo";
@@ -58,14 +59,66 @@ export function buildTranscribeArgs(
   return args;
 }
 
-export function pythonVenvPath(): string {
-  return join(repoRoot, ".venv/bin/python");
+export interface PythonRuntime {
+  pythonPath: string;
+  venvRoot?: string;
+}
+
+export function pythonRuntimeCandidates(
+  root: string,
+  env: NodeJS.ProcessEnv = process.env,
+  gitCommonDir = gitCommonDirectory(root),
+): PythonRuntime[] {
+  const candidates: PythonRuntime[] = [];
+  if (env.STT_PYTHON) {
+    candidates.push({ pythonPath: env.STT_PYTHON });
+  }
+
+  candidates.push({
+    pythonPath: join(root, ".venv/bin/python"),
+    venvRoot: join(root, ".venv"),
+  });
+
+  const mainWorktreeRoot = mainWorktreeRootFromGitCommonDir(root, gitCommonDir);
+  if (mainWorktreeRoot && mainWorktreeRoot !== root) {
+    candidates.push({
+      pythonPath: join(mainWorktreeRoot, ".venv/bin/python"),
+      venvRoot: join(mainWorktreeRoot, ".venv"),
+    });
+  }
+
+  candidates.push({ pythonPath: "python3" });
+  return dedupeCandidates(candidates);
+}
+
+export function resolvePythonRuntime(
+  root = repoRoot,
+  env: NodeJS.ProcessEnv = process.env,
+): PythonRuntime {
+  const candidates = pythonRuntimeCandidates(root, env);
+  const runtime = candidates.find((candidate) =>
+    candidate.pythonPath === "python3"
+      ? commandExists("python3")
+      : existsSync(candidate.pythonPath),
+  );
+  if (runtime) {
+    return runtime;
+  }
+
+  throw new Error(
+    [
+      "Python runtime not found.",
+      "Run: python3 -m venv .venv && .venv/bin/pip install -r requirements.txt",
+      "Or set STT_PYTHON=/path/to/python.",
+    ].join(" "),
+  );
 }
 
 export function transcribeEnvironment(
   env: NodeJS.ProcessEnv = process.env,
+  venvRoot = join(repoRoot, ".venv"),
 ): NodeJS.ProcessEnv {
-  const sitePackages = join(repoRoot, ".venv/lib/python3.12/site-packages");
+  const sitePackages = join(venvRoot, "lib/python3.12/site-packages");
   const cudaLibDirs = [
     join(sitePackages, "nvidia/cublas/lib"),
     join(sitePackages, "nvidia/cudnn/lib"),
@@ -85,18 +138,13 @@ export async function transcribeAudio(
   audioFile: string,
   options: TranscribeOptions,
 ): Promise<string> {
-  const python = pythonVenvPath();
-  if (!existsSync(python)) {
-    throw new Error(
-      "Python venv not found. Run: python3 -m venv .venv && .venv/bin/pip install -r requirements.txt",
-    );
-  }
+  const runtime = resolvePythonRuntime();
   const result = await runCommand(
-    python,
+    runtime.pythonPath,
     buildTranscribeArgs(audioFile, options),
     {
       cwd: repoRoot,
-      env: transcribeEnvironment(),
+      env: transcribeEnvironment(process.env, runtime.venvRoot),
     },
   );
   if (result.stderr.trim()) {
@@ -106,4 +154,48 @@ export async function transcribeAudio(
     throw new Error(`STT failed with exit code ${result.code}`);
   }
   return result.stdout.trim();
+}
+
+function gitCommonDirectory(root: string): string | undefined {
+  const result = spawnSync(
+    "git",
+    ["-C", root, "rev-parse", "--git-common-dir"],
+    {
+      encoding: "utf8",
+    },
+  );
+  if (result.status !== 0) {
+    return undefined;
+  }
+  const value = result.stdout.trim();
+  if (!value) {
+    return undefined;
+  }
+  return isAbsolute(value) ? value : resolve(root, value);
+}
+
+function mainWorktreeRootFromGitCommonDir(
+  root: string,
+  gitCommonDir: string | undefined,
+): string | undefined {
+  if (!gitCommonDir || basename(gitCommonDir) !== ".git") {
+    return undefined;
+  }
+  return dirname(gitCommonDir);
+}
+
+function commandExists(command: string): boolean {
+  const result = spawnSync("which", [command], { stdio: "ignore" });
+  return result.status === 0;
+}
+
+function dedupeCandidates(candidates: PythonRuntime[]): PythonRuntime[] {
+  const seen = new Set<string>();
+  return candidates.filter((candidate) => {
+    if (seen.has(candidate.pythonPath)) {
+      return false;
+    }
+    seen.add(candidate.pythonPath);
+    return true;
+  });
 }

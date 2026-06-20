@@ -1,8 +1,9 @@
 export {
   buildTranscribeArgs,
   DEFAULT_TRANSCRIBE_OPTIONS,
-  pythonVenvPath,
+  pythonRuntimeCandidates,
+  resolvePythonRuntime,
   transcribeAudio,
   transcribeEnvironment,
 } from "./model/sttAdapter";
-export type { TranscribeOptions } from "./model/sttAdapter";
+export type { PythonRuntime, TranscribeOptions } from "./model/sttAdapter";

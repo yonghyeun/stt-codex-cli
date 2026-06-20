@@ -84,10 +84,11 @@ Current primary TypeScript commands:
 - `npm run recover-tokens --`, `npm run compare-transcript --`, `npm run analyze-code-switch-suite --`: deterministic helper command다.
 - `npm run fetch-kss-fixture --`, `npm run fetch-hike-fixture --`: fixture download command다.
 
-Legacy Python/Bash scripts:
+Compatibility and adapter boundary:
 
 - `scripts/transcribe.py`: faster-whisper Python runtime adapter다. TS `transcribe`와 `stt-codex`가 이 adapter를 호출한다.
-- `scripts/*.py`, `scripts/*.sh`: 이전 prototype과 비교 기준으로 유지한다. 새 사용자-facing 흐름은 TypeScript command를 우선한다.
+- `scripts/*.sh`: 이전 경로 호환성을 위한 wrapper다. 내부 구현은 `npm run ...` TypeScript command로 전달한다.
+- 그 외 legacy Python product script는 유지하지 않는다.
 
 Current TypeScript surface:
 
@@ -176,6 +177,13 @@ npm run analyze-code-switch-suite -- output/suite/hike-code-switch-core-v1-large
 
 현재 primary orchestration은 TypeScript다. faster-whisper 실행은 Python adapter `scripts/transcribe.py`를 통해 유지한다.
 
+STT Python runtime 탐색 순서:
+
+1. `STT_PYTHON`
+2. 현재 worktree의 `.venv/bin/python`
+3. main worktree의 `.venv/bin/python`
+4. `python3`
+
 ## Pre-E2E Verification
 
 E2E 전에 확인할 수 있는 비마이크 검증:
@@ -187,7 +195,7 @@ npm run lint
 npm run format:check
 npm run stt-codex -- --help
 npm run stt-codex -- --inject-mode fixed-text --disable-inject-key --cmd python3 -- -c 'print("ts-pty-smoke")'
-python3 -m py_compile scripts/stt_codex.py scripts/transcribe.py scripts/compare_transcript.py
+python3 -m py_compile scripts/transcribe.py
 ```
 
 한국어 fixture regression:
@@ -241,7 +249,7 @@ E2E는 사용자가 실제 장비로 발화한 뒤 확인한다.
 
 통과 기준:
 
-- `scripts/stt_codex.py`가 Codex CLI를 child PTY로 실행한다.
+- `npm run stt-codex --`가 Codex CLI를 child PTY로 실행한다.
 - 사용자가 `Ctrl+T`를 누르고 말하면 recording start/stop이 표시된다.
 - STT raw transcript가 Codex CLI 입력창에 삽입된다.
 - Enter는 자동 전송되지 않는다.

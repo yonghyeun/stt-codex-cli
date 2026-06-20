@@ -10,8 +10,8 @@ faster-whisper 자체는 Python package이므로 `scripts/transcribe.py`를 STT 
 
 ## Current Ported Surface
 
-- `src/features/transcript-comparison`: Python `scripts/compare_transcript.py`의
-  normalize/exact 비교 의미를 TypeScript 순수 함수로 옮긴다.
+- `src/features/transcript-comparison`: 기존 transcript normalize/exact 비교 의미를
+  TypeScript 순수 함수로 옮긴다.
 - `src/features/token-recovery`: manual memory 기반 token recovery 순수 로직.
 - `src/features/code-switch-analysis`: Latin token preservation 분석.
 - `src/features/audio-recording`: `arecord` command construction과 녹음 helper.
@@ -31,7 +31,7 @@ faster-whisper 자체는 Python package이므로 `scripts/transcribe.py`를 STT 
 - `src/app/cli`: argv, file IO, stdout/stderr, exit code.
 - `src/features`: 제품 기능 단위의 순수 로직.
 - `src/shared`: domain-free helper. 필요할 때만 추가.
-- `scripts`: legacy prototype과 Python STT adapter 유지 영역.
+- `scripts`: shell compatibility wrapper와 Python STT adapter 유지 영역.
 
 ## Code Guidelines
 
@@ -49,7 +49,7 @@ faster-whisper 자체는 Python package이므로 `scripts/transcribe.py`를 STT 
 - 코드 동작 변경은 failing test를 먼저 작성한다.
 - 순수 로직은 fixture 없이 빠르게 검증한다.
 - CLI entrypoint는 exit code, stdout, stderr를 관찰 값으로 검증한다.
-- 기존 Python/Bash script는 비교 기준으로 유지할 수 있지만 새 검증 surface는 TypeScript command를 우선한다.
+- 새 검증 surface는 TypeScript command를 우선한다.
 
 기본 검증 명령:
 
@@ -67,10 +67,10 @@ npm run format:check
 3. token recovery 관련 순수 로직. 완료.
 4. CLI orchestration 보조 레이어. 완료.
 5. PTY wrapper와 STT injection. 완료.
-6. Python/Bash legacy 제거 여부는 실제 장비 E2E 이후 결정.
+6. legacy Python product script 제거. 완료.
 
 ## Non-Goals
 
 - faster-whisper 자체를 Node 구현으로 바꾸지 않는다.
 - STT 정확도 자체를 개선하지 않는다.
-- 실제 장비 E2E 없이 legacy script를 삭제하지 않는다.
+- Python STT adapter `scripts/transcribe.py`는 별도 runtime 교체 결정 전까지 유지한다.

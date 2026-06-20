@@ -3,7 +3,7 @@
 `src/`는 새 TypeScript 포팅 코드의 기준 위치다.
 
 TypeScript는 현재 primary command와 feature logic의 기준 위치다.
-Python/Bash는 legacy prototype과 faster-whisper adapter 경계로 남긴다.
+Python은 faster-whisper adapter 경계로만 남기고, Bash는 compatibility wrapper로만 둔다.
 
 ## Layout
 
