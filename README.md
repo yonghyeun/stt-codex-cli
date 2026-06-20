@@ -33,12 +33,13 @@ Linux에서 Codex CLI 입력을 보조하기 위한 로컬 STT 실험 workspace.
 
 ```text
 terminal
-  -> scripts/stt_codex.py parent wrapper
+  -> npm run stt-codex -- parent wrapper
+    -> src/app/cli/stt-codex.ts
     -> child PTY: codex --no-alt-screen
     -> parent status: [stt-parent] prefix
     -> push-to-talk controller: ctrl+t
     -> temporary audio recorder: arecord
-    -> local STT: scripts/transcribe.sh -> scripts/transcribe.py -> faster-whisper
+    -> local STT adapter: src/features/stt-adapter -> scripts/transcribe.py -> faster-whisper
     -> raw transcript injector: child PTY input buffer
 ```
 
@@ -46,12 +47,12 @@ Runtime flow:
 
 ```text
 사용자 실행
-  -> scripts/stt_codex.py
+  -> npm run stt-codex --
   -> Codex CLI child PTY 시작
   -> 사용자가 Ctrl+T를 누르고 말함
-  -> parent wrapper가 임시 WAV 녹음
+  -> TypeScript parent wrapper가 임시 WAV 녹음
   -> Ctrl+T 반복 입력이 끊기면 녹음 종료
-  -> faster-whisper로 STT 변환
+  -> Python STT adapter를 통해 faster-whisper로 STT 변환
   -> raw transcript를 Codex 입력창에 삽입
   -> 사용자가 확인 후 Enter
 ```
@@ -72,20 +73,29 @@ Storage:
 - `--keep-audio`는 임시 WAV 자체를 남기는 debug option이다.
 - `output/`은 명시 저장 결과만 담는 위치다.
 
-Current core scripts:
+Current primary TypeScript commands:
 
-- `scripts/stt_codex.py`: 현재 메인 entrypoint. Codex child PTY, PTT, STT, transcript injection을 담당한다.
-- `scripts/transcribe.sh`: venv/CUDA library path를 준비하고 `transcribe.py`를 실행한다.
-- `scripts/transcribe.py`: faster-whisper STT 실행을 담당한다.
-- `scripts/run_fixture_suite.sh`, `scripts/run_fixture_suite.py`: fixture regression을 담당한다.
-- `scripts/record.sh`, `scripts/push_to_talk.py`, `scripts/stt_clipboard.sh`, `scripts/record_clipboard.sh`, `scripts/copy_text.sh`: 이전 prototype 또는 보조 흐름이다.
+- `npm run stt-codex --`: 현재 메인 entrypoint. Codex child PTY, PTT, STT, transcript injection을 담당한다.
+- `npm run transcribe --`: Python faster-whisper adapter를 호출하는 TypeScript STT command다.
+- `npm run record --`: `arecord` 기반 WAV 녹음 command다.
+- `npm run stt-clipboard --`: audio file -> STT -> token recovery -> clipboard 흐름이다.
+- `npm run record-clipboard --`: microphone record -> STT clipboard 흐름이다.
+- `npm run push-to-talk --`: standalone push-to-talk prototype command다.
+- `npm run recover-tokens --`, `npm run compare-transcript --`, `npm run analyze-code-switch-suite --`: deterministic helper command다.
+- `npm run fetch-kss-fixture --`, `npm run fetch-hike-fixture --`: fixture download command다.
+
+Legacy Python/Bash scripts:
+
+- `scripts/transcribe.py`: faster-whisper Python runtime adapter다. TS `transcribe`와 `stt-codex`가 이 adapter를 호출한다.
+- `scripts/*.py`, `scripts/*.sh`: 이전 prototype과 비교 기준으로 유지한다. 새 사용자-facing 흐름은 TypeScript command를 우선한다.
 
 Current TypeScript surface:
 
 - `src/README.md`: TypeScript source layout와 포팅 계약이다.
-- `docs/typescript-porting.md`: Python/Bash 병행 운영과 TS 포팅 순서를 정의한다.
+- `docs/typescript-porting.md`: TypeScript primary flow와 Python STT adapter 경계를 정의한다.
 - `src/features/transcript-comparison`: transcript 비교 순수 로직이다.
-- `src/app/cli/compare-transcript.ts`: transcript 비교 Node CLI다.
+- `src/features/token-recovery`, `src/features/code-switch-analysis`, `src/features/audio-recording`, `src/features/clipboard`, `src/features/codex-pty`: 포팅된 기능 로직이다.
+- `src/app/cli/*.ts`: 사용자-facing TypeScript command다.
 
 Deferred architecture:
 
@@ -117,13 +127,13 @@ Deferred architecture:
 기본 실행:
 
 ```bash
-scripts/stt_codex.py
+npm run stt-codex --
 ```
 
 정확도 기준 모델을 명시:
 
 ```bash
-scripts/stt_codex.py --stt-model large-v3 --stt-device cuda --stt-compute-type float16
+npm run stt-codex -- --stt-model large-v3 --stt-device cuda --stt-compute-type float16
 ```
 
 실행 후 사용자는 `Ctrl+T`를 누르고 말한다. `Ctrl+T` 반복 입력이 끊기면 wrapper가 녹음을 종료하고 STT raw transcript를 Codex CLI 입력창에 삽입한다. Enter는 사용자가 직접 누른다.
@@ -131,7 +141,7 @@ scripts/stt_codex.py --stt-model large-v3 --stt-device cuda --stt-compute-type f
 실제 발화 audio와 transcript를 남겨 비교해야 할 때만 저장 option을 켠다.
 
 ```bash
-scripts/stt_codex.py --save-run --stt-model large-v3 --stt-device cuda --stt-compute-type float16
+npm run stt-codex -- --save-run --stt-model large-v3 --stt-device cuda --stt-compute-type float16
 ```
 
 저장 결과는 `output/runs/YYYYMMDD-HHMMSS-mmm-stt-codex/` 아래에 남는다.
@@ -153,31 +163,37 @@ npm run lint
 npm run format:check
 ```
 
-TS transcript 비교 CLI:
+TS 주요 CLI:
 
 ```bash
+npm run stt-codex -- --help
+npm run transcribe -- audio.wav --model tiny --device cpu --compute-type int8
+npm run recover-tokens -- --fixture fixtures/token-recovery-v1.json
 npm run compare-transcript -- expected.txt actual.txt
 npm run compare-transcript -- --exact expected.txt actual.txt
+npm run analyze-code-switch-suite -- output/suite/hike-code-switch-core-v1-large-v3-cuda-float16.json
 ```
 
-현재 TS 코드는 기존 Python/Bash STT runtime을 대체하지 않는다. 결정적 보조 로직부터 포팅하며, 기존 fixture regression과 wrapper 실행 흐름은 유지한다.
+현재 primary orchestration은 TypeScript다. faster-whisper 실행은 Python adapter `scripts/transcribe.py`를 통해 유지한다.
 
 ## Pre-E2E Verification
 
 E2E 전에 확인할 수 있는 비마이크 검증:
 
 ```bash
-python3 -m py_compile scripts/stt_codex.py
-scripts/stt_codex.py --help
 npm test
 npm run typecheck
 npm run lint
+npm run format:check
+npm run stt-codex -- --help
+npm run stt-codex -- --inject-mode fixed-text --disable-inject-key --cmd python3 -- -c 'print("ts-pty-smoke")'
+python3 -m py_compile scripts/stt_codex.py scripts/transcribe.py scripts/compare_transcript.py
 ```
 
 한국어 fixture regression:
 
 ```bash
-scripts/run_fixture_suite.sh fixtures/kss-ko-core-v1.json --model large-v3 --device cuda --compute-type float16
+npm run run-fixture-suite -- fixtures/kss-ko-core-v1.json --model large-v3 --device cuda --compute-type float16
 ```
 
 현재 기준 결과:
@@ -190,8 +206,8 @@ scripts/run_fixture_suite.sh fixtures/kss-ko-core-v1.json --model large-v3 --dev
 한영 혼합 accuracy risk 측정:
 
 ```bash
-scripts/run_fixture_suite.sh fixtures/hike-code-switch-core-v1.json --model large-v3 --device cuda --compute-type float16 --require none
-scripts/analyze_code_switch_suite.py output/suite/hike-code-switch-core-v1-large-v3-cuda-float16.json
+npm run run-fixture-suite -- fixtures/hike-code-switch-core-v1.json --model large-v3 --device cuda --compute-type float16 --require none
+npm run analyze-code-switch-suite -- output/suite/hike-code-switch-core-v1-large-v3-cuda-float16.json
 ```
 
 현재 기준 결과:
@@ -204,7 +220,7 @@ scripts/analyze_code_switch_suite.py output/suite/hike-code-switch-core-v1-large
 Wrapper smoke test:
 
 ```bash
-scripts/stt_codex.py --stt-model tiny --stt-device cpu --stt-compute-type int8 --cmd python3 -- -q
+npm run stt-codex -- --stt-model tiny --stt-device cpu --stt-compute-type int8 --cmd python3 -- -q
 ```
 
 이 smoke test는 wrapper 실행, child PTY, trigger 처리, STT 호출, empty transcript skip, 임시 audio 삭제를 확인한다. 실제 발화 품질은 확인하지 않는다.

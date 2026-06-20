@@ -2,6 +2,18 @@
 
 STT 실행 스크립트 위치.
 
+현재 primary 사용자-facing command는 repo root의 `npm run ...` TypeScript command다.
+`scripts/`는 legacy prototype과 Python faster-whisper adapter 경계로 유지한다.
+
+대표 TS command:
+
+```bash
+npm run stt-codex --
+npm run transcribe -- audio.wav --model tiny --device cpu --compute-type int8
+npm run recover-tokens -- --fixture fixtures/token-recovery-v1.json
+npm run compare-transcript -- expected.txt actual.txt
+```
+
 초기 목표:
 
 - 짧은 마이크 녹음.

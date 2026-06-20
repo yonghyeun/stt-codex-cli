@@ -2,8 +2,8 @@
 
 `src/`는 새 TypeScript 포팅 코드의 기준 위치다.
 
-기존 Python/Bash runtime은 유지한다. TypeScript는 먼저 결정적이고 테스트 가능한
-보조 로직부터 포팅한다.
+TypeScript는 현재 primary command와 feature logic의 기준 위치다.
+Python/Bash는 legacy prototype과 faster-whisper adapter 경계로 남긴다.
 
 ## Layout
 
@@ -16,6 +16,16 @@ src/
   shared/       # 도메인 없는 재사용 유틸. 필요할 때만 추가.
 ```
 
+현재 feature:
+
+- `transcript-comparison`
+- `token-recovery`
+- `code-switch-analysis`
+- `audio-recording`
+- `clipboard`
+- `stt-adapter`
+- `codex-pty`
+
 ## Rules
 
 - `type: module` 기준 ESM을 사용한다.
@@ -25,7 +35,7 @@ src/
 - side effect는 `app/cli` 같은 경계에 둔다.
 - `features/**`는 가능한 순수 함수와 값 반환 중심으로 작성한다.
 - 오류는 CLI boundary에서 exit code와 stderr로 변환한다.
-- runtime Python/Bash 흐름 제거는 별도 issue에서만 진행한다.
+- Python faster-whisper adapter 제거는 별도 결정 전까지 하지 않는다.
 
 ## Tests
 
