@@ -78,14 +78,60 @@ Current core scripts:
 - `scripts/transcribe.sh`: venv/CUDA library path를 준비하고 `transcribe.py`를 실행한다.
 - `scripts/transcribe.py`: faster-whisper STT 실행을 담당한다.
 - `scripts/run_fixture_suite.sh`, `scripts/run_fixture_suite.py`: fixture regression을 담당한다.
-- `scripts/record.sh`, `scripts/push_to_talk.py`, `scripts/stt_clipboard.sh`, `scripts/record_clipboard.sh`, `scripts/copy_text.sh`: 이전 prototype 또는 보조 흐름이다.
+- `scripts/record.sh`, `scripts/push_to_talk.py`, `scripts/stt_clipboard.sh`, `scripts/record_clipboard.sh`, `scripts/copy_text.sh`: 보조 실행 흐름이다.
 
-Deferred architecture:
+Mini-layer architecture contract:
 
-- token recovery는 기본 흐름에서 제외한다.
-- workspace metadata 기반 복원은 후속 기능이다.
-- clipboard 전달 흐름은 이전 prototype으로 유지하되 최종 방향은 child PTY injection이다.
-- OpenCode 같은 다른 terminal coding agent 지원은 후속 일반화 대상이다.
+- 이 repo의 source ownership은 `scripts`, `stt_core`, `stt_runtime`, `stt_features`로 나눈다.
+- 이 계약은 로컬 source tree 안의 문서와 코드 배치 기준이다.
+- 이 계약은 로컬 파일만 source of truth로 사용한다.
+- 코드가 계약과 다르면 코드가 drift 상태다.
+- drift 판단은 이 로컬 문서 계약을 기준으로 한다.
+
+Mini-layer structure:
+
+```text
+terminal
+  -> scripts/stt_codex.py thin CLI entrypoint
+    -> stt_features: user-facing flow
+      -> stt_runtime: OS/process/PTY/file adapters
+      -> stt_core: pure policy and data contract
+```
+
+Layer ownership:
+
+- `scripts/`: 사용자가 실행하는 command surface, CLI option, backward-compatible entrypoint.
+- `stt_core/`: 실행환경과 무관한 순수 판단, data contract, deterministic transformation.
+- `stt_runtime/`: process, device, terminal, filesystem 같은 외부 실행환경 adapter.
+- `stt_features/`: 사용자가 얻는 기능 단위의 flow와 outcome 조립.
+
+Allowed dependency direction:
+
+```text
+scripts -> stt_features
+scripts -> stt_runtime
+scripts -> stt_core
+stt_features -> stt_runtime
+stt_features -> stt_core
+stt_runtime -> stt_core
+stt_core -> nothing in this repo
+```
+
+Forbidden dependency direction:
+
+- `stt_core -> stt_runtime`
+- `stt_core -> stt_features`
+- `stt_core -> scripts`
+- `stt_runtime -> stt_features`
+- `stt_runtime -> scripts`
+- `stt_features -> scripts`
+
+Current exclusion:
+
+- token recovery는 wrapper 기본 흐름의 소유 책임이 아니다.
+- workspace metadata 기반 복원은 wrapper 기본 흐름의 소유 책임이 아니다.
+- clipboard 전달 흐름은 child PTY injection 계약과 별도 실행 흐름이다.
+- 다른 terminal coding agent 지원은 현재 Codex CLI wrapper 계약의 소유 책임이 아니다.
 
 ## Priority
 
@@ -173,13 +219,13 @@ scripts/stt_codex.py --stt-model tiny --stt-device cpu --stt-compute-type int8 -
 
 이 smoke test는 wrapper 실행, child PTY, trigger 처리, STT 호출, empty transcript skip, 임시 audio 삭제를 확인한다. 실제 발화 품질은 확인하지 않는다.
 
-## Known Issues
+## Current Limits
 
 - 실제 마이크 입력 품질이 낮으면 STT 결과가 크게 나빠진다. 장비 교체 후 `--save-run`으로 audio와 transcript를 같이 확인한다.
 - `Ctrl+T` PTT는 terminal key repeat에 의존한다. tmux나 terminal 설정에 따라 control sequence가 예상과 다를 수 있다.
 - `--inject-key t`는 smoke test에 유용하지만 일반 typing과 충돌하므로 기본값으로 쓰지 않는다.
 - 한영 혼합 문장에서 `session`, `bug`, 파일명, option name 같은 Latin token이 한글 외래어 표기로 바뀔 수 있다.
-- token recovery, personal vocabulary, workspace metadata 기반 복원은 후속 기능이다.
+- wrapper 기본 흐름은 token recovery, personal vocabulary, workspace metadata 기반 복원을 수행하지 않는다.
 - STT 실행 중에는 wrapper event loop가 잠시 block될 수 있다.
 - `--save-run`은 실제 발화 audio와 transcript를 파일로 남긴다. 외부 공유 전 `output/` 확인이 필요하다.
 
@@ -197,9 +243,9 @@ E2E는 사용자가 실제 장비로 발화한 뒤 확인한다.
 - 기본 실행에서는 audio와 transcript가 영구 저장되지 않는다.
 - `--save-run`을 켠 경우에만 `output/runs/`에 run artifact가 남는다.
 
-## Local Baseline
+## Local Baseline Snapshot
 
-2026-06-19 현재 확인한 로컬 기준:
+2026-06-19 local baseline snapshot:
 
 - OS: Ubuntu Linux, x86_64.
 - CPU: AMD Ryzen 5 5600H, 6 cores / 12 threads.
@@ -211,81 +257,50 @@ E2E는 사용자가 실제 장비로 발화한 뒤 확인한다.
 - 미설치: `pactl`, `wl-copy`, `sox`.
 - Python: 3.12.3.
 - 로컬 STT 런타임: `.venv`에 `faster-whisper==1.2.1` 설치 확인.
-- 로컬 STT 모델: 초기 조사 시 Whisper/Hugging Face/faster-whisper/whisperx 캐시 또는 설치본 없음. Prototype 2 smoke test로 `Systran/faster-whisper-tiny` 다운로드 확인.
+- 로컬 STT 모델: `Systran/faster-whisper-tiny` 다운로드 확인.
 - 정확도 기준 모델: `large-v3` CUDA `float16` 실행 확인. CUDA 실행에는 `requirements-cuda.txt` 설치 필요.
-- 한영 혼합 기준: HiKE code-switching suite에서 Latin-script token 보존율 50% 확인. 일반 문장의 외래어 표기 전환은 자연스러울 수 있으나, 파일명/옵션명/코드 식별자 문맥의 별도 복원은 후속 기능으로 둔다.
+- 한영 혼합 기준: HiKE code-switching suite에서 Latin-script token 보존율 50% 확인. 일반 문장의 외래어 표기 전환은 자연스러울 수 있으나, 파일명/옵션명/코드 식별자 문맥의 복원은 wrapper 기본 흐름의 소유 책임이 아니다.
 
-첫 프로토타입은 녹음 파일 생성까지만 다룬다. 누르고 말하기 UX는 녹음 안정성 확인 후 별도 프로토타입에서 다룬다.
+## Current Capability Surface
 
-## Prototype Roadmap
-
-1. 마이크 입력을 녹음 파일로 저장한다.
-2. 로컬 STT 모델 후보를 하나 붙여 텍스트 변환을 확인한다.
-3. 정답 transcript가 있는 fixture WAV로 재현 가능한 변환 실험을 만든다.
-4. 한국어와 한영 혼합 문장의 정확도 실험을 기록한다.
-5. 일반 입력과 workspace 입력의 mode 계약을 분리한다.
-6. 변환 결과를 클립보드에 복사한다.
-7. 누르고 말하기 방식의 입력 UX를 만든다.
-8. 녹음, STT, 클립보드 복사를 하나의 명령으로 묶는다.
-9. 실제 Codex CLI 입력 흐름에서 반복 사용성을 검증한다.
-10. 정확도, 오인식 사례, 처리 시간을 기준으로 모델과 UX를 조정한다.
-11. Codex CLI를 child PTY로 실행하는 wrapper를 만든다.
-12. wrapper에서 사용자 키 입력과 Codex 출력을 passthrough한다.
-13. 고정 텍스트를 child PTY 입력창에 삽입해 자동 입력만 검증한다.
-14. push-to-talk 녹음과 STT를 wrapper에 연결한다.
-15. STT raw transcript를 Codex CLI 입력창에 삽입한다.
-16. 임시 audio 기본 삭제와 선택 저장 옵션을 적용한다.
+- Microphone recording: `scripts/record.sh`, `scripts/record_clipboard.sh`, `scripts/push_to_talk.py`, `scripts/stt_codex.py`.
+- Local STT conversion: `scripts/transcribe.sh`, `scripts/transcribe.py`.
+- Fixture regression: `scripts/run_fixture_suite.sh`, `scripts/run_fixture_suite.py`, `scripts/compare_transcript.py`, `scripts/analyze_code_switch_suite.py`.
+- Clipboard helper flow: `scripts/copy_text.sh`, `scripts/stt_clipboard.sh`, `scripts/record_clipboard.sh`.
+- Manual token recovery script: `scripts/recover_tokens.py`.
+- Codex child PTY wrapper: `scripts/stt_codex.py`.
+- Optional run artifact save: `scripts/stt_codex.py --save-run`.
 
 ## Input Modes
 
-- Raw mode: repo context 없이 STT 결과를 그대로 Codex CLI 입력창에 삽입한다. 기본 mode다.
-- Recovery mode: 파일명, 옵션명, 코드 식별자 같은 token 복원을 수행한다. 후속 기능이다.
-- Personal vocabulary mode: 사용자가 자주 쓰는 단어와 프로젝트명을 선택적으로 추가한다. 후속 기능이다.
+- Raw mode: repo context 없이 STT 결과를 그대로 Codex CLI 입력창에 삽입한다. wrapper 기본 mode다.
+- Manual recovery mode: `scripts/recover_tokens.py`가 수동 memory JSON으로 transcript token을 복원한다.
+- Clipboard mode: `scripts/stt_clipboard.sh`와 `scripts/record_clipboard.sh`가 변환 결과를 clipboard에 복사한다.
+- Wrapper STT mode: `scripts/stt_codex.py`가 `Ctrl+T` 녹음, STT 변환, child PTY 삽입을 처리한다.
 
-초기 wrapper 흐름에서는 STT raw transcript만 사용한다. token recovery와 workspace metadata는 closeout 이후 후속 기능으로 둔다.
+## Current Behavior Contract
 
-Phase 8 prototype은 자동 수집 이전 단계다. `memory/manual-aliases.example.json` 같은 수동 memory를 읽어 텍스트 transcript를 복원한다.
-
-Phase 9 prototype은 텍스트를 clipboard에 복사한다. 현재 Linux 기준 backend는 `xclip`이며, 복사 후 clipboard 내용을 다시 읽어 검증한다.
-
-Phase 10 prototype은 기존 audio 파일을 STT로 변환하고, token recovery를 거쳐 clipboard에 복사한다.
-
-Phase 11 prototype은 정해진 시간 마이크를 녹음한 뒤 Phase 10 흐름으로 이어 clipboard에 복사한다. push-to-talk 입력 UX는 아직 후속 단계다.
-
-Phase 12 prototype은 `t` 단독키 push-to-talk 입력을 추가한다. 사용자는 keycode와 modifier keycode를 바꿀 수 있다.
-
-Phase 13 prototype은 Codex CLI를 child PTY로 실행하는 wrapper를 추가한다. 이 단계는 STT 없이 입출력 passthrough만 검증한다.
-
-Phase 14 prototype은 wrapper에서 고정 텍스트를 Codex CLI 입력창에 삽입한다. 자동 전송은 하지 않는다.
-
-Phase 15 prototype은 wrapper에서 push-to-talk 녹음과 STT raw transcript 삽입을 연결한다. 녹음본은 기본적으로 임시 파일로 처리하고 삭제한다.
-
-Phase 16 prototype은 필요할 때만 audio와 transcript를 저장하는 옵션을 추가한다.
-
-Phase 16의 저장 option은 `--save-run`이다. 저장 directory 이름은 `YYYYMMDD-HHMMSS-mmm-stt-codex` 형식이다. 같은 millisecond 충돌이 발생하면 `-001` 같은 suffix를 붙인다. 각 run directory에는 `audio.wav`, `transcript.txt`, `metadata.json`을 남긴다.
-
-## Closeout Criteria
-
-- Linux 데스크탑에서 한 명령 또는 한 단축키 흐름으로 실행 가능하다.
+- Linux 데스크탑에서 wrapper를 실행한다.
 - wrapper 안에서 Codex CLI가 child PTY로 실행된다.
-- 사용자가 누르고 말한 문장이 로컬 STT로 텍스트화된다.
+- 사용자가 `Ctrl+T`를 누르고 말하면 로컬 STT가 transcript를 만든다.
 - 변환 결과가 Codex CLI 입력창에 삽입된다.
-- 사용자가 삽입된 텍스트를 확인하고 직접 전송할 수 있다.
+- 사용자가 삽입된 텍스트를 확인하고 직접 전송한다.
 - 정답 transcript가 있는 fixture WAV로 STT 변환 회귀 확인이 가능하다.
-- 한국어와 한영 혼합 명령의 실험 결과가 `experiments/`에 기록되어 있다.
-- 알려진 오인식 사례와 회피 방법이 문서화되어 있다.
+- 한국어와 한영 혼합 명령의 실험 결과는 `experiments/`에 기록한다.
 - 자동 전송 없이 사용자의 확인 단계를 유지한다.
 - 녹음본과 transcript는 기본적으로 영구 저장하지 않는다.
 - 명시적 저장 옵션을 켰을 때만 run artifact를 남긴다.
-- raw 입력 mode와 token recovery 후속 기능의 경계가 분리되어 있다.
+- raw 입력 mode와 manual token recovery script는 서로 분리되어 있다.
 
-## Initial Shape
+## Repository Shape
 
-- `scripts/`: Codex PTY wrapper, 녹음, STT, fixture 검증, 이전 clipboard prototype 스크립트.
-- `memory/`: 수동 token recovery memory 예시와 계약. 후속 기능이다.
+- `scripts/`: Codex PTY wrapper, 녹음, STT, fixture 검증, clipboard helper 스크립트.
+- `stt_core/`: 실행환경과 무관한 순수 판단과 data contract.
+- `stt_runtime/`: OS, subprocess, PTY, terminal, filesystem side-effect adapter.
+- `stt_features/`: 사용자-facing STT 입력 보조 flow 조립.
+- `memory/`: 수동 token recovery memory 예시와 계약.
 - `experiments/`: 모델, 녹음 방식, 단축키 UX 실험 기록.
 - `output/`: 명시적으로 저장한 로컬 실행 결과물. 기본적으로 Git 추적 제외.
-- `.github/ISSUE_TEMPLATE/`: repo task issue template.
 - `.codex/skills/task-system/`: task 운영 계약 reference.
 - `.codex/skills/task-commit/`: 한국어 topic commit helper.
 
@@ -295,5 +310,3 @@ Phase 16의 저장 option은 `--save-run`이다. 저장 directory 이름은 `YYY
 - STT 결과 자동 전송.
 - token recovery 기본 적용.
 - workspace metadata 기반 자동 복원.
-- GitHub issue/PR 생성/merge 자동화.
-- 원격 repo label/issue 계약 확정.
