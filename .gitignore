@@ -10,3 +10,4 @@ fixtures/generated/
 __pycache__/
 .pytest_cache/
 memory/*.local.json
+stt-codex-cli-worktrees.code-workspace
