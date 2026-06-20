@@ -4,9 +4,8 @@
 
 이 repo는 Python/Bash 기반 STT prototype을 TypeScript primary command로 전환한다.
 
-faster-whisper 자체는 Python package이므로 `scripts/transcribe.py`를 STT adapter로
-유지한다. 그 외 사용자-facing orchestration과 deterministic helper는 TypeScript를
-우선한다.
+STT 실행도 Python adapter 없이 TypeScript 경계에서 처리한다. 내부 local STT
+runtime은 npm dependency `nodejs-whisper`가 제공하는 번들 `whisper.cpp` CLI다.
 
 ## Current Ported Surface
 
@@ -16,13 +15,13 @@ faster-whisper 자체는 Python package이므로 `scripts/transcribe.py`를 STT 
 - `src/features/code-switch-analysis`: Latin token preservation 분석.
 - `src/features/audio-recording`: `arecord` command construction과 녹음 helper.
 - `src/features/clipboard`: `xclip`/`wl-copy` backend 선택과 command mapping.
-- `src/features/stt-adapter`: TypeScript에서 Python faster-whisper adapter를 호출하는 경계.
+- `src/features/stt-engine`: TypeScript에서 nodejs-whisper/whisper.cpp CLI를 호출하는 경계.
 - `src/features/codex-pty`: key parsing, child argv, run id, trigger split.
 - `src/app/cli/*.ts`: 파일 IO, argv parsing, stdout/stderr, exit code를 담당한다.
 - `npm run compare-transcript -- expected.txt actual.txt`: normalized 비교.
 - `npm run compare-transcript -- --exact expected.txt actual.txt`: exact 비교.
 - `npm run stt-codex --`: Codex child PTY와 STT transcript injection primary command.
-- `npm run transcribe --`: Python STT adapter 호출 command.
+- `npm run transcribe --`: TypeScript STT engine 호출 command.
 - `npm run record --`, `npm run stt-clipboard --`, `npm run record-clipboard --`,
   `npm run push-to-talk --`: 이전 prototype의 TypeScript command.
 
@@ -31,7 +30,7 @@ faster-whisper 자체는 Python package이므로 `scripts/transcribe.py`를 STT 
 - `src/app/cli`: argv, file IO, stdout/stderr, exit code.
 - `src/features`: 제품 기능 단위의 순수 로직.
 - `src/shared`: domain-free helper. 필요할 때만 추가.
-- `scripts`: shell compatibility wrapper와 Python STT adapter 유지 영역.
+- `scripts`: shell compatibility wrapper 유지 영역. Python adapter는 두지 않는다.
 
 ## Code Guidelines
 
@@ -68,9 +67,10 @@ npm run format:check
 4. CLI orchestration 보조 레이어. 완료.
 5. PTY wrapper와 STT injection. 완료.
 6. legacy Python product script 제거. 완료.
+7. Python STT adapter 제거와 Node STT engine 전환. 완료.
 
 ## Non-Goals
 
-- faster-whisper 자체를 Node 구현으로 바꾸지 않는다.
 - STT 정확도 자체를 개선하지 않는다.
-- Python STT adapter `scripts/transcribe.py`는 별도 runtime 교체 결정 전까지 유지한다.
+- Whisper 모델 자체를 TypeScript로 재구현하지 않는다. npm dependency의 local
+  whisper.cpp runtime을 사용한다.

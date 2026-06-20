@@ -2,8 +2,8 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
 
 import { parseClipboardBackend } from "@/features/clipboard";
+import { transcribeAudio } from "@/features/stt-engine";
 import { parseMemoryEntries, recoverText } from "@/features/token-recovery";
-import { transcribeAudio } from "@/features/stt-adapter";
 import { readJsonFile } from "@/shared/json";
 import { repoPath } from "@/shared/repo";
 import { hasMeaningfulText } from "@/shared/text";

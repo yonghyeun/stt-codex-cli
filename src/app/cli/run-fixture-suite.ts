@@ -2,8 +2,8 @@ import { existsSync } from "node:fs";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
+import { transcribeAudio } from "@/features/stt-engine";
 import { compareTranscripts } from "@/features/transcript-comparison";
-import { transcribeAudio } from "@/features/stt-adapter";
 import { asRecord, readJsonFile } from "@/shared/json";
 
 import { isDirectRun } from "./shared/direct-run";
@@ -43,7 +43,7 @@ export async function main(argv = process.argv.slice(2)): Promise<number> {
       parsed.args.fixtureRoot ?? join("fixtures/generated", suiteId);
     const output =
       parsed.args.output ??
-      join("output/suite", `${suiteId}-typescript-adapter.json`);
+      join("output/suite", `${suiteId}-typescript-engine.json`);
     const results = [];
     const startedAt = performance.now();
 

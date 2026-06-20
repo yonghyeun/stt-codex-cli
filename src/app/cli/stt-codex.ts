@@ -11,7 +11,7 @@ import {
   splitByTrigger,
   type InjectMode,
 } from "@/features/codex-pty";
-import { transcribeAudio } from "@/features/stt-adapter";
+import { transcribeAudio } from "@/features/stt-engine";
 import { repoRoot } from "@/shared/repo";
 import { hasMeaningfulText } from "@/shared/text";
 
@@ -53,6 +53,7 @@ interface Args {
   sttBeamSize: number;
   sttInitialPrompt?: string;
   sttNoVadFilter: boolean;
+  sttVadModel?: string;
   cmdArgs: string[];
 }
 
@@ -125,6 +126,7 @@ function parseArgs(argv: string[]): ParseResult {
     sttBeamSize: Number(process.env.STT_BEAM_SIZE ?? "5"),
     sttInitialPrompt: process.env.STT_INITIAL_PROMPT,
     sttNoVadFilter: false,
+    sttVadModel: process.env.STT_VAD_MODEL,
     cmdArgs: [],
   };
   args.injectKey =
@@ -187,6 +189,7 @@ function parseArgs(argv: string[]): ParseResult {
       "--stt-compute-type",
       "--stt-beam-size",
       "--stt-initial-prompt",
+      "--stt-vad-model",
     ]);
     if (valueOptions.has(arg)) {
       const value = argv[index + 1];
@@ -256,6 +259,7 @@ function assignOption(
     }
     args.sttBeamSize = beamSize;
   } else if (name === "--stt-initial-prompt") args.sttInitialPrompt = value;
+  else if (name === "--stt-vad-model") args.sttVadModel = value;
   return undefined;
 }
 
@@ -439,6 +443,7 @@ async function finishRecordingAndInject(
       beamSize: args.sttBeamSize,
       initialPrompt: args.sttInitialPrompt,
       vadFilter: !args.sttNoVadFilter,
+      vadModel: args.sttVadModel,
     });
     if (!hasMeaningfulText(transcript)) {
       parentStatus(args, "empty transcript; nothing injected");
@@ -558,6 +563,7 @@ async function saveRunArtifacts(
           compute_type: args.sttComputeType,
           beam_size: args.sttBeamSize,
           vad_filter: !args.sttNoVadFilter,
+          vad_model: args.sttVadModel,
           initial_prompt: args.sttInitialPrompt,
         },
       },

@@ -6,11 +6,8 @@ fixtures/generated/
 *.m4a
 *.flac
 *.log
-.venv/
 node_modules/
 coverage/
 dist/
-__pycache__/
-.pytest_cache/
 memory/*.local.json
 stt-codex-cli-worktrees.code-workspace

@@ -1,8 +1,8 @@
 import {
   DEFAULT_TRANSCRIBE_OPTIONS,
   transcribeAudio,
-} from "@/features/stt-adapter";
-import type { TranscribeOptions } from "@/features/stt-adapter";
+} from "@/features/stt-engine";
+import type { TranscribeOptions } from "@/features/stt-engine";
 
 import { isDirectRun } from "./shared/direct-run";
 
@@ -61,6 +61,7 @@ export function parseArgs(argv: string[]): ParseResult {
     initialPrompt: process.env.STT_INITIAL_PROMPT,
     modelDir: process.env.STT_MODEL_DIR,
     vadFilter: envFlag("STT_VAD_FILTER", true),
+    vadModel: process.env.STT_VAD_MODEL,
   };
 
   for (let index = 0; index < argv.length; index += 1) {
@@ -85,6 +86,7 @@ export function parseArgs(argv: string[]): ParseResult {
         "--beam-size",
         "--initial-prompt",
         "--model-dir",
+        "--vad-model",
         "--output",
       ].includes(arg)
     ) {
@@ -138,6 +140,8 @@ function assignOption(
     options.initialPrompt = value;
   } else if (name === "--model-dir") {
     options.modelDir = value;
+  } else if (name === "--vad-model") {
+    options.vadModel = value;
   } else if (name === "--output") {
     options.output = value;
   }

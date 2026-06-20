@@ -39,7 +39,7 @@ terminal
     -> parent status: [stt-parent] prefix
     -> push-to-talk controller: ctrl+t
     -> temporary audio recorder: arecord
-    -> local STT adapter: src/features/stt-adapter -> scripts/transcribe.py -> faster-whisper
+    -> local STT engine: src/features/stt-engine -> nodejs-whisper package -> whisper.cpp CLI
     -> raw transcript injector: child PTY input buffer
 ```
 
@@ -52,7 +52,7 @@ Runtime flow:
   -> 사용자가 Ctrl+T를 누르고 말함
   -> TypeScript parent wrapper가 임시 WAV 녹음
   -> Ctrl+T 반복 입력이 끊기면 녹음 종료
-  -> Python STT adapter를 통해 faster-whisper로 STT 변환
+  -> TypeScript STT engine이 whisper.cpp로 STT 변환
   -> raw transcript를 Codex 입력창에 삽입
   -> 사용자가 확인 후 Enter
 ```
@@ -76,7 +76,7 @@ Storage:
 Current primary TypeScript commands:
 
 - `npm run stt-codex --`: 현재 메인 entrypoint. Codex child PTY, PTT, STT, transcript injection을 담당한다.
-- `npm run transcribe --`: Python faster-whisper adapter를 호출하는 TypeScript STT command다.
+- `npm run transcribe --`: nodejs-whisper package의 whisper.cpp CLI를 호출하는 TypeScript STT command다.
 - `npm run record --`: `arecord` 기반 WAV 녹음 command다.
 - `npm run stt-clipboard --`: audio file -> STT -> token recovery -> clipboard 흐름이다.
 - `npm run record-clipboard --`: microphone record -> STT clipboard 흐름이다.
@@ -84,18 +84,18 @@ Current primary TypeScript commands:
 - `npm run recover-tokens --`, `npm run compare-transcript --`, `npm run analyze-code-switch-suite --`: deterministic helper command다.
 - `npm run fetch-kss-fixture --`, `npm run fetch-hike-fixture --`: fixture download command다.
 
-Compatibility and adapter boundary:
+Compatibility boundary:
 
-- `scripts/transcribe.py`: faster-whisper Python runtime adapter다. TS `transcribe`와 `stt-codex`가 이 adapter를 호출한다.
 - `scripts/*.sh`: 이전 경로 호환성을 위한 wrapper다. 내부 구현은 `npm run ...` TypeScript command로 전달한다.
-- 그 외 legacy Python product script는 유지하지 않는다.
+- `scripts/`에는 Python product script나 Python adapter를 두지 않는다.
+- STT model cache 기본 위치는 `output/models/whisper.cpp`다.
 
 Current TypeScript surface:
 
 - `src/README.md`: TypeScript source layout와 포팅 계약이다.
-- `docs/typescript-porting.md`: TypeScript primary flow와 Python STT adapter 경계를 정의한다.
+- `docs/typescript-porting.md`: TypeScript primary flow와 Node STT engine 경계를 정의한다.
 - `src/features/transcript-comparison`: transcript 비교 순수 로직이다.
-- `src/features/token-recovery`, `src/features/code-switch-analysis`, `src/features/audio-recording`, `src/features/clipboard`, `src/features/codex-pty`: 포팅된 기능 로직이다.
+- `src/features/token-recovery`, `src/features/code-switch-analysis`, `src/features/audio-recording`, `src/features/clipboard`, `src/features/stt-engine`, `src/features/codex-pty`: 포팅된 기능 로직이다.
 - `src/app/cli/*.ts`: 사용자-facing TypeScript command다.
 
 Deferred architecture:
@@ -134,7 +134,7 @@ npm run stt-codex --
 정확도 기준 모델을 명시:
 
 ```bash
-npm run stt-codex -- --stt-model large-v3 --stt-device cuda --stt-compute-type float16
+npm run stt-codex -- --stt-model large-v3 --stt-device cuda
 ```
 
 실행 후 사용자는 `Ctrl+T`를 누르고 말한다. `Ctrl+T` 반복 입력이 끊기면 wrapper가 녹음을 종료하고 STT raw transcript를 Codex CLI 입력창에 삽입한다. Enter는 사용자가 직접 누른다.
@@ -142,7 +142,7 @@ npm run stt-codex -- --stt-model large-v3 --stt-device cuda --stt-compute-type f
 실제 발화 audio와 transcript를 남겨 비교해야 할 때만 저장 option을 켠다.
 
 ```bash
-npm run stt-codex -- --save-run --stt-model large-v3 --stt-device cuda --stt-compute-type float16
+npm run stt-codex -- --save-run --stt-model large-v3 --stt-device cuda
 ```
 
 저장 결과는 `output/runs/YYYYMMDD-HHMMSS-mmm-stt-codex/` 아래에 남는다.
@@ -168,21 +168,24 @@ TS 주요 CLI:
 
 ```bash
 npm run stt-codex -- --help
-npm run transcribe -- audio.wav --model tiny --device cpu --compute-type int8
+npm run transcribe -- audio.wav --model tiny --device cpu
 npm run recover-tokens -- --fixture fixtures/token-recovery-v1.json
 npm run compare-transcript -- expected.txt actual.txt
 npm run compare-transcript -- --exact expected.txt actual.txt
 npm run analyze-code-switch-suite -- output/suite/hike-code-switch-core-v1-large-v3-cuda-float16.json
 ```
 
-현재 primary orchestration은 TypeScript다. faster-whisper 실행은 Python adapter `scripts/transcribe.py`를 통해 유지한다.
+현재 primary orchestration과 STT 실행 경계는 TypeScript다.
 
-STT Python runtime 탐색 순서:
+STT engine 기준:
 
-1. `STT_PYTHON`
-2. 현재 worktree의 `.venv/bin/python`
-3. main worktree의 `.venv/bin/python`
-4. `python3`
+- npm dependency: `nodejs-whisper`.
+- 내부 실행기: `node_modules/nodejs-whisper/cpp/whisper.cpp`의 `whisper-cli`.
+- model cache 기본 위치: `output/models/whisper.cpp`.
+- 기본 model: `large-v3`.
+- `--stt-device cuda`는 whisper.cpp를 `-DGGML_CUDA=1`로 build한다.
+- `--stt-compute-type`은 기존 CLI 호환용 option이며 whisper.cpp engine에서는 직접 사용하지 않는다.
+- VAD는 `--vad-model` 또는 `STT_VAD_MODEL`이 지정된 경우에만 whisper.cpp `--vad`로 전달한다.
 
 ## Pre-E2E Verification
 
@@ -194,41 +197,36 @@ npm run typecheck
 npm run lint
 npm run format:check
 npm run stt-codex -- --help
-npm run stt-codex -- --inject-mode fixed-text --disable-inject-key --cmd python3 -- -c 'print("ts-pty-smoke")'
-python3 -m py_compile scripts/transcribe.py
+npm run stt-codex -- --inject-mode fixed-text --disable-inject-key --cmd node -- --eval 'console.log("ts-pty-smoke")'
 ```
 
 한국어 fixture regression:
 
 ```bash
-npm run run-fixture-suite -- fixtures/kss-ko-core-v1.json --model large-v3 --device cuda --compute-type float16
+npm run run-fixture-suite -- fixtures/kss-ko-core-v1.json --model large-v3 --device cuda
 ```
 
 현재 기준 결과:
 
-- PASS 6/6.
-- exact 5/6.
-- normalized 6/6.
-- output: `output/suite/kss-ko-core-v1-large-v3-cuda-float16.json`.
+- Node STT engine 전환 후 재측정 필요.
+- 현재 worktree에는 `fixtures/generated/` audio가 없어 즉시 재실행하지 않았다.
 
 한영 혼합 accuracy risk 측정:
 
 ```bash
-npm run run-fixture-suite -- fixtures/hike-code-switch-core-v1.json --model large-v3 --device cuda --compute-type float16 --require none
-npm run analyze-code-switch-suite -- output/suite/hike-code-switch-core-v1-large-v3-cuda-float16.json
+npm run run-fixture-suite -- fixtures/hike-code-switch-core-v1.json --model large-v3 --device cuda --require none
+npm run analyze-code-switch-suite -- output/suite/hike-code-switch-core-v1-typescript-engine.json
 ```
 
 현재 기준 결과:
 
-- exact 0/5.
-- normalized 0/5.
-- Latin token preservation 14/28, 50%.
-- output: `output/suite/hike-code-switch-core-v1-large-v3-cuda-float16.json`.
+- Node STT engine 전환 후 재측정 필요.
+- 현재 worktree에는 `fixtures/generated/` audio가 없어 즉시 재실행하지 않았다.
 
 Wrapper smoke test:
 
 ```bash
-npm run stt-codex -- --stt-model tiny --stt-device cpu --stt-compute-type int8 --cmd python3 -- -q
+npm run stt-codex -- --stt-model tiny --stt-device cpu --cmd node -- -i
 ```
 
 이 smoke test는 wrapper 실행, child PTY, trigger 처리, STT 호출, empty transcript skip, 임시 audio 삭제를 확인한다. 실제 발화 품질은 확인하지 않는다.
@@ -269,11 +267,11 @@ E2E는 사용자가 실제 장비로 발화한 뒤 확인한다.
 - Audio capture: ALSA `arecord` 사용 가능, `HD-Audio Generic ALC257 Analog` capture device 확인.
 - Clipboard: `xclip` 사용 가능.
 - 미설치: `pactl`, `wl-copy`, `sox`.
-- Python: 3.12.3.
-- 로컬 STT 런타임: `.venv`에 `faster-whisper==1.2.1` 설치 확인.
-- 로컬 STT 모델: 초기 조사 시 Whisper/Hugging Face/faster-whisper/whisperx 캐시 또는 설치본 없음. Prototype 2 smoke test로 `Systran/faster-whisper-tiny` 다운로드 확인.
-- 정확도 기준 모델: `large-v3` CUDA `float16` 실행 확인. CUDA 실행에는 `requirements-cuda.txt` 설치 필요.
-- 한영 혼합 기준: HiKE code-switching suite에서 Latin-script token 보존율 50% 확인. 일반 문장의 외래어 표기 전환은 자연스러울 수 있으나, 파일명/옵션명/코드 식별자 문맥의 별도 복원은 후속 기능으로 둔다.
+- Node.js: v24.12.0.
+- 로컬 STT runtime: npm dependency `nodejs-whisper`와 번들 `whisper.cpp` CLI.
+- 로컬 STT model cache: `output/models/whisper.cpp`.
+- 정확도 기준 모델: `large-v3`. CUDA 실행은 `--stt-device cuda`와 local CMake/CUDA build에 의존한다.
+- 한영 혼합 기준: Node STT engine 전환 후 재측정 필요. 일반 문장의 외래어 표기 전환은 자연스러울 수 있으나, 파일명/옵션명/코드 식별자 문맥의 별도 복원은 후속 기능으로 둔다.
 
 첫 프로토타입은 녹음 파일 생성까지만 다룬다. 누르고 말하기 UX는 녹음 안정성 확인 후 별도 프로토타입에서 다룬다.
 

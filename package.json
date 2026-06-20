@@ -36,6 +36,7 @@
     "vitest": "^4.1.9"
   },
   "dependencies": {
-    "node-pty": "^1.1.0"
+    "node-pty": "^1.1.0",
+    "nodejs-whisper": "^0.3.0"
   }
 }

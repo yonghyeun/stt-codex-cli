@@ -3,7 +3,7 @@
 `src/`는 새 TypeScript 포팅 코드의 기준 위치다.
 
 TypeScript는 현재 primary command와 feature logic의 기준 위치다.
-Python은 faster-whisper adapter 경계로만 남기고, Bash는 compatibility wrapper로만 둔다.
+STT 실행도 TypeScript 경계에서 관리한다. Bash는 compatibility wrapper로만 둔다.
 
 ## Layout
 
@@ -23,7 +23,7 @@ src/
 - `code-switch-analysis`
 - `audio-recording`
 - `clipboard`
-- `stt-adapter`
+- `stt-engine`
 - `codex-pty`
 
 ## Rules
@@ -35,7 +35,7 @@ src/
 - side effect는 `app/cli` 같은 경계에 둔다.
 - `features/**`는 가능한 순수 함수와 값 반환 중심으로 작성한다.
 - 오류는 CLI boundary에서 exit code와 stderr로 변환한다.
-- Python faster-whisper adapter 제거는 별도 결정 전까지 하지 않는다.
+- Python product script와 Python STT adapter는 유지하지 않는다.
 
 ## Tests
 

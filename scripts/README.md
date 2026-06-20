@@ -1,6 +1,6 @@
 # Scripts
 
-`scripts/`는 compatibility wrapper와 Python STT adapter만 둔다.
+`scripts/`는 compatibility wrapper만 둔다.
 
 Primary 사용자-facing command는 repo root의 `npm run ...` TypeScript command다.
 
@@ -8,13 +8,13 @@ Primary 사용자-facing command는 repo root의 `npm run ...` TypeScript comman
 
 ```bash
 npm run stt-codex --
-npm run transcribe -- audio.wav --model tiny --device cpu --compute-type int8
+npm run transcribe -- audio.wav --model tiny --device cpu
 npm run record --
 npm run stt-clipboard -- audio.wav
 npm run record-clipboard -- --duration 3
 npm run recover-tokens -- --fixture fixtures/token-recovery-v1.json
 npm run compare-transcript -- expected.txt actual.txt
-npm run run-fixture-suite -- fixtures/kss-ko-core-v1.json --model tiny --device cpu --compute-type int8
+npm run run-fixture-suite -- fixtures/kss-ko-core-v1.json --model tiny --device cpu
 npm run analyze-code-switch-suite -- output/suite/result.json
 ```
 
@@ -29,29 +29,14 @@ npm run analyze-code-switch-suite -- output/suite/result.json
 - `scripts/run_fixture_suite.sh` -> `npm run run-fixture-suite --`
 - `scripts/transcribe.sh` -> `npm run transcribe --`
 
-## Python Boundary
+## STT Engine
 
-`scripts/transcribe.py`만 Python으로 남긴다.
+STT 실행은 `npm run transcribe --` TypeScript command가 담당한다.
 
-이 파일은 faster-whisper package를 호출하는 adapter다. TypeScript command
-`npm run transcribe --`와 `npm run stt-codex --`는 이 adapter를 통해 로컬 STT를 실행한다.
+내부 구현은 npm dependency `nodejs-whisper`의 번들 `whisper.cpp` CLI를 사용한다.
+Python adapter와 pip requirements는 유지하지 않는다.
 
-STT Python runtime 탐색 순서:
+기본 model cache 위치는 `output/models/whisper.cpp`다.
 
-1. `STT_PYTHON`
-2. 현재 worktree의 `.venv/bin/python`
-3. main worktree의 `.venv/bin/python`
-4. `python3`
-
-Python adapter setup:
-
-```bash
-python3 -m venv .venv
-.venv/bin/pip install -r requirements.txt
-```
-
-CUDA 실행이 필요하면 추가 설치한다.
-
-```bash
-.venv/bin/pip install -r requirements-cuda.txt
-```
+CUDA 실행이 필요하면 `--device cuda` 또는 `--stt-device cuda`를 사용한다.
+이 경우 local CMake/CUDA build가 필요하다.
