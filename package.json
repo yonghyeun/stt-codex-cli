@@ -4,7 +4,19 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "analyze-code-switch-suite": "tsx src/app/cli/analyze-code-switch-suite.ts",
+    "copy-text": "tsx src/app/cli/copy-text.ts",
     "compare-transcript": "tsx src/app/cli/compare-transcript.ts",
+    "fetch-hike-fixture": "tsx src/app/cli/fetch-hike-fixture.ts",
+    "fetch-kss-fixture": "tsx src/app/cli/fetch-kss-fixture.ts",
+    "push-to-talk": "tsx src/app/cli/push-to-talk.ts",
+    "record": "tsx src/app/cli/record.ts",
+    "record-clipboard": "tsx src/app/cli/record-clipboard.ts",
+    "recover-tokens": "tsx src/app/cli/recover-tokens.ts",
+    "run-fixture-suite": "tsx src/app/cli/run-fixture-suite.ts",
+    "stt-clipboard": "tsx src/app/cli/stt-clipboard.ts",
+    "stt-codex": "tsx src/app/cli/stt-codex.ts",
+    "transcribe": "tsx src/app/cli/transcribe.ts",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "lint": "eslint \"src/**/*.ts\" vitest.config.ts eslint.config.mjs --no-error-on-unmatched-pattern",
@@ -22,5 +34,8 @@
     "typescript": "^6.0.3",
     "typescript-eslint": "^8.61.1",
     "vitest": "^4.1.9"
+  },
+  "dependencies": {
+    "node-pty": "^1.1.0"
   }
 }
