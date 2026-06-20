@@ -275,9 +275,45 @@ scripts/stt_codex.py --stt-model tiny --stt-device cpu --stt-compute-type int8 -
 - 녹음 파일은 system temp directory에 임시 WAV로 만든다.
 - 기본적으로 STT 후 임시 WAV를 삭제한다.
 - `--keep-audio`를 주면 임시 WAV를 삭제하지 않는다.
+- `--save-run`을 주면 `output/runs/` 아래에 audio, transcript, metadata를 저장한다.
 - transcript가 비어 있거나 punctuation-only이면 child PTY에 삽입하지 않는다.
 - token recovery는 수행하지 않는다.
 - Enter는 사용자가 직접 누른다.
+
+## Prototype 16: Optional Run Artifact Save
+
+기본적으로 녹음본과 transcript는 영구 저장하지 않는다. 디버깅이나 정확도 비교가 필요할 때만 `--save-run`을 켠다.
+
+```bash
+scripts/stt_codex.py --save-run
+```
+
+정확도 기준 모델과 함께 저장:
+
+```bash
+scripts/stt_codex.py --save-run --stt-model large-v3 --stt-device cuda --stt-compute-type float16
+```
+
+저장 위치를 바꿀 수 있다.
+
+```bash
+scripts/stt_codex.py --save-run --run-output-dir output/runs
+```
+
+Run directory 구조:
+
+```text
+output/runs/20260620-153012-427-stt-codex/
+  audio.wav
+  transcript.txt
+  metadata.json
+```
+
+- directory 이름은 `YYYYMMDD-HHMMSS-mmm-stt-codex` 형식이다.
+- 같은 millisecond에 충돌하면 `-001` suffix를 붙인다.
+- `metadata.json`에는 recording config, STT option, elapsed time, outcome, injected 여부를 기록한다.
+- 가능한 outcome은 `injected`, `empty_transcript`, `skipped_short_recording`, `stt_error`, `interrupted_recording`이다.
+- `--keep-audio`는 system temp directory의 임시 WAV도 함께 남기는 debug option이다.
 
 ## Prototype 1: Record Only
 

@@ -4,10 +4,12 @@ from __future__ import annotations
 import argparse
 import errno
 import fcntl
+import json
 import os
 import pty
 import selectors
 import signal
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -15,6 +17,7 @@ import termios
 import time
 import tty
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 
 
@@ -27,6 +30,7 @@ DEFAULT_INJECT_TEXT = "hello from stt wrapper"
 DEFAULT_RELEASE_GAP = 0.75
 DEFAULT_MAX_DURATION = 60.0
 DEFAULT_MIN_DURATION = 0.15
+DEFAULT_RUN_OUTPUT_DIR = "output/runs"
 PARENT_PREFIX = "[stt-parent]"
 READ_SIZE = 4096
 
@@ -51,6 +55,7 @@ class RecordingState:
     process: subprocess.Popen[bytes] | None = None
     audio_file: Path | None = None
     started_at: float | None = None
+    started_wall_at: datetime | None = None
     last_trigger_at: float | None = None
 
     def active(self) -> bool:
@@ -139,6 +144,16 @@ def parse_args() -> argparse.Namespace:
         "--keep-audio",
         action="store_true",
         help="Keep temporary audio files after transcription.",
+    )
+    parser.add_argument(
+        "--save-run",
+        action="store_true",
+        help="Save audio, transcript, and metadata under output/runs/.",
+    )
+    parser.add_argument(
+        "--run-output-dir",
+        default=os.environ.get("STT_RUN_OUTPUT_DIR", DEFAULT_RUN_OUTPUT_DIR),
+        help=f"Directory for --save-run artifacts. Default: {DEFAULT_RUN_OUTPUT_DIR}",
     )
     parser.add_argument(
         "--stt-model",
@@ -302,6 +317,8 @@ def parent_banner(args: argparse.Namespace, argv: list[str], cwd: str | None) ->
                 args,
                 f"ptt key: {args.inject_key}; release gap {args.release_gap:g}s; Enter still manual",
             )
+            if args.save_run:
+                parent_status(args, f"run artifacts: {resolve_run_output_dir(args)}")
     parent_status(args, "child output follows")
     if sys.stderr.isatty() and not args.no_color:
         print("\033[36m" + ("-" * 48) + "\033[0m", file=sys.stderr, flush=True)
@@ -371,21 +388,119 @@ def create_temp_audio(args: argparse.Namespace) -> Path:
         return Path(temp_file.name)
 
 
+def resolve_run_output_dir(args: argparse.Namespace) -> Path:
+    output_dir = Path(args.run_output_dir).expanduser()
+    if not output_dir.is_absolute():
+        output_dir = REPO_ROOT / output_dir
+    return output_dir
+
+
+def run_id_from_timestamp(timestamp: datetime) -> str:
+    milliseconds = timestamp.microsecond // 1000
+    return f"{timestamp:%Y%m%d-%H%M%S}-{milliseconds:03d}-stt-codex"
+
+
+def create_run_dir(args: argparse.Namespace, timestamp: datetime) -> Path:
+    output_dir = resolve_run_output_dir(args)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    base_name = run_id_from_timestamp(timestamp)
+    for suffix in [None, *range(1, 1000)]:
+        run_name = base_name if suffix is None else f"{base_name}-{suffix:03d}"
+        run_dir = output_dir / run_name
+        try:
+            run_dir.mkdir()
+            return run_dir
+        except FileExistsError:
+            continue
+    raise RuntimeError(f"could not create unique run directory under {output_dir}")
+
+
+def recording_config() -> dict[str, str]:
+    return {
+        "device": os.environ.get("STT_RECORD_DEVICE", "default"),
+        "format": os.environ.get("STT_RECORD_FORMAT", "S16_LE"),
+        "rate": os.environ.get("STT_RECORD_RATE", "16000"),
+        "channels": os.environ.get("STT_RECORD_CHANNELS", "1"),
+    }
+
+
+def save_run_artifacts(
+    args: argparse.Namespace,
+    audio_file: Path,
+    transcript: str,
+    *,
+    started_at: datetime,
+    elapsed: float,
+    injected: bool,
+    outcome: str,
+    error: str | None = None,
+) -> Path | None:
+    if not args.save_run:
+        return None
+
+    run_dir = create_run_dir(args, started_at)
+    audio_output = run_dir / "audio.wav"
+    transcript_output = run_dir / "transcript.txt"
+    metadata_output = run_dir / "metadata.json"
+
+    if args.keep_audio:
+        shutil.copy2(audio_file, audio_output)
+    else:
+        shutil.move(str(audio_file), audio_output)
+    transcript_output.write_text(transcript + "\n", encoding="utf-8")
+
+    metadata = {
+        "schema_version": 1,
+        "run_id": run_dir.name,
+        "created_at": datetime.now().astimezone().isoformat(timespec="milliseconds"),
+        "recording_started_at": started_at.isoformat(timespec="milliseconds"),
+        "elapsed_seconds": round(elapsed, 3),
+        "outcome": outcome,
+        "injected": injected,
+        "transcript_chars": len(transcript),
+        "transcript_has_text": transcript_has_text(transcript),
+        "audio_file": "audio.wav",
+        "transcript_file": "transcript.txt",
+        "error": error,
+        "recording": recording_config(),
+        "stt": {
+            "model": args.stt_model,
+            "language": args.stt_language,
+            "device": args.stt_device,
+            "compute_type": args.stt_compute_type,
+            "beam_size": args.stt_beam_size,
+            "vad_filter": not args.stt_no_vad_filter,
+            "initial_prompt": args.stt_initial_prompt,
+        },
+        "child": {
+            "command": child_argv(args),
+            "cwd": args.cwd or os.getcwd(),
+        },
+    }
+    metadata_output.write_text(
+        json.dumps(metadata, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    parent_status(args, f"saved run artifacts: {run_dir}")
+    return run_dir
+
+
 def start_recording(args: argparse.Namespace, state: RecordingState) -> None:
     if state.active():
         return
 
     audio_file = create_temp_audio(args)
+    config = recording_config()
     command = [
         "arecord",
         "-D",
-        os.environ.get("STT_RECORD_DEVICE", "default"),
+        config["device"],
         "-f",
-        os.environ.get("STT_RECORD_FORMAT", "S16_LE"),
+        config["format"],
         "-r",
-        os.environ.get("STT_RECORD_RATE", "16000"),
+        config["rate"],
         "-c",
-        os.environ.get("STT_RECORD_CHANNELS", "1"),
+        config["channels"],
         str(audio_file),
     ]
     state.process = subprocess.Popen(
@@ -396,16 +511,21 @@ def start_recording(args: argparse.Namespace, state: RecordingState) -> None:
     )
     state.audio_file = audio_file
     state.started_at = time.monotonic()
+    state.started_wall_at = datetime.now().astimezone()
     state.last_trigger_at = state.started_at
     parent_status(args, f"recording started: {audio_file}")
 
 
-def stop_recording(args: argparse.Namespace, state: RecordingState) -> tuple[Path, float]:
+def stop_recording(
+    args: argparse.Namespace,
+    state: RecordingState,
+) -> tuple[Path, float, datetime]:
     if state.process is None or state.audio_file is None:
         raise RuntimeError("recording is not running")
 
     process = state.process
     audio_file = state.audio_file
+    started_wall_at = state.started_wall_at or datetime.now().astimezone()
     elapsed = state.elapsed()
     if process.poll() is None:
         process.send_signal(signal.SIGINT)
@@ -422,9 +542,10 @@ def stop_recording(args: argparse.Namespace, state: RecordingState) -> tuple[Pat
     state.process = None
     state.audio_file = None
     state.started_at = None
+    state.started_wall_at = None
     state.last_trigger_at = None
     parent_status(args, f"recording stopped: elapsed={elapsed:.2f}s")
-    return audio_file, elapsed
+    return audio_file, elapsed, started_wall_at
 
 
 def cleanup_audio(args: argparse.Namespace, audio_file: Path) -> None:
@@ -478,15 +599,16 @@ def transcribe_audio(args: argparse.Namespace, audio_file: Path) -> str:
     return result.stdout.strip()
 
 
-def inject_transcript(args: argparse.Namespace, child_fd: int, transcript: str) -> None:
+def inject_transcript(args: argparse.Namespace, child_fd: int, transcript: str) -> bool:
     if not transcript_has_text(transcript):
         parent_status(args, "empty transcript; nothing injected")
-        return
+        return False
     os.write(child_fd, transcript.encode())
     parent_status(
         args,
         f"injected transcript {len(transcript)} chars; review text, then press Enter to send",
     )
+    return True
 
 
 def finish_recording_and_inject(
@@ -494,17 +616,37 @@ def finish_recording_and_inject(
     child_fd: int,
     state: RecordingState,
 ) -> None:
-    audio_file, elapsed = stop_recording(args, state)
+    audio_file, elapsed, started_at = stop_recording(args, state)
+    transcript = ""
+    injected = False
+    outcome = "unknown"
+    error_message: str | None = None
     try:
         if elapsed < args.min_duration:
             parent_status(
                 args,
                 f"recording too short: {elapsed:.2f}s < {args.min_duration:g}s; skipped STT",
             )
+            outcome = "skipped_short_recording"
             return
         transcript = transcribe_audio(args, audio_file)
-        inject_transcript(args, child_fd, transcript)
+        injected = inject_transcript(args, child_fd, transcript)
+        outcome = "injected" if injected else "empty_transcript"
+    except RuntimeError as error:
+        outcome = "stt_error"
+        error_message = str(error)
+        raise
     finally:
+        save_run_artifacts(
+            args,
+            audio_file,
+            transcript,
+            started_at=started_at,
+            elapsed=elapsed,
+            injected=injected,
+            outcome=outcome,
+            error=error_message,
+        )
         cleanup_audio(args, audio_file)
 
 
@@ -664,7 +806,16 @@ def passthrough(args: argparse.Namespace, pid: int, child_fd: int) -> int:
                     handle_stdin_data(args, child_fd, data, recording_state)
     finally:
         if recording_state.active():
-            audio_file, _ = stop_recording(args, recording_state)
+            audio_file, elapsed, started_at = stop_recording(args, recording_state)
+            save_run_artifacts(
+                args,
+                audio_file,
+                "",
+                started_at=started_at,
+                elapsed=elapsed,
+                injected=False,
+                outcome="interrupted_recording",
+            )
             cleanup_audio(args, audio_file)
         signal.signal(signal.SIGWINCH, previous_sigwinch)
         selector.close()
