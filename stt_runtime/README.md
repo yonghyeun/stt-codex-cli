@@ -4,28 +4,24 @@
 
 ## Ownership
 
-- ALSA `arecord` 녹음 시작과 종료.
-- Temporary audio file 생성과 삭제.
-- `scripts/transcribe.sh` subprocess 호출.
-- child PTY 생성, read, write.
-- terminal raw mode 설정과 복구.
-- window-size sync.
-- signal handling.
-- run artifact의 실제 파일 write, move, copy.
+- 코드 바깥 세계와 통신하는 adapter.
+- 외부 process 실행과 결과 수집.
+- Device, terminal, PTY, signal 같은 runtime resource 제어.
+- Filesystem persistence와 temporary resource lifecycle.
+- Runtime 실패를 호출자가 다룰 수 있는 값이나 예외로 정규화.
 
 ## Allowed Dependencies
 
 - `stt_core`.
 - Python standard library runtime module.
-- `os`, `pty`, `termios`, `tty`, `signal`, `selectors`, `subprocess`, `tempfile`, `shutil`.
+- OS, subprocess, terminal, filesystem 처리를 위한 standard library module.
 
 ## Forbidden Responsibilities
 
 - CLI argument parsing의 source of truth.
 - 사용자-facing feature policy 결정.
-- transcript 의미 판정의 source of truth.
-- token recovery 정책 소유.
-- 전체 use-case 순서 조립.
+- 순수 data contract 판단의 source of truth.
+- 여러 adapter를 기능 단위로 조립하는 use-case flow.
 - `scripts` entrypoint import.
 
 ## Dependency Direction
@@ -44,10 +40,8 @@ stt_runtime -> scripts
 stt_runtime -> stt_features
 ```
 
-## Placement Guide
+## Placement Rule
 
-- `start_recording()`과 `stop_recording()`은 `stt_runtime`에 둔다.
-- `transcribe_audio()`의 subprocess adapter는 `stt_runtime`에 둔다.
-- `spawn_child()`와 `TerminalMode`는 `stt_runtime`에 둔다.
-- `transcript_has_text()`는 `stt_runtime`이 아니라 `stt_core`에 둔다.
-- `finish_recording_and_inject()`처럼 흐름을 조립하는 함수는 `stt_features`에 둔다.
+- 외부 process, device, terminal, PTY, filesystem을 직접 다루면 `stt_runtime`에 둔다.
+- 외부 세계와 닿지 않는 판단은 `stt_runtime`에 두지 않는다.
+- 사용자가 인식하는 기능 순서 조립은 `stt_runtime`에 두지 않는다.

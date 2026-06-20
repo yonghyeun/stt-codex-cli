@@ -102,8 +102,8 @@ Layer ownership:
 
 - `scripts/`: 사용자가 실행하는 command surface, CLI option, backward-compatible entrypoint.
 - `stt_core/`: 실행환경과 무관한 순수 판단, data contract, deterministic transformation.
-- `stt_runtime/`: `arecord`, `transcribe.sh`, child PTY, terminal mode, filesystem write 같은 side-effect adapter.
-- `stt_features/`: recording, STT, transcript injection, optional artifact save를 조합하는 use-case flow.
+- `stt_runtime/`: process, device, terminal, filesystem 같은 외부 실행환경 adapter.
+- `stt_features/`: 사용자가 얻는 기능 단위의 flow와 outcome 조립.
 
 Allowed dependency direction:
 

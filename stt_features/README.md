@@ -4,11 +4,10 @@
 
 ## Ownership
 
-- 녹음 시작부터 transcript 삽입까지의 workflow.
-- Fixed text injection workflow.
-- STT transcript injection workflow.
-- Optional run artifact 저장 여부를 포함한 feature-level outcome 조립.
-- Runtime adapter 실패를 사용자 flow 결과로 연결하는 orchestration.
+- 사용자가 인식하는 기능 단위의 workflow.
+- Core 판단과 runtime adapter를 조합한 feature outcome.
+- Runtime 실패를 사용자 flow의 결과로 연결하는 orchestration.
+- 기능 정책과 실행 순서.
 
 ## Allowed Dependencies
 
@@ -19,10 +18,9 @@
 ## Forbidden Responsibilities
 
 - CLI argument parser의 source of truth.
-- child PTY나 terminal raw mode의 low-level 구현.
-- `arecord` command 직접 구성.
-- faster-whisper subprocess 직접 호출.
-- 순수 transcript/data contract 판단 재정의.
+- Runtime adapter의 low-level 구현.
+- 외부 process, device, terminal, PTY, filesystem 직접 제어.
+- 순수 data contract 판단 재정의.
 - `scripts` entrypoint import.
 
 ## Dependency Direction
@@ -40,10 +38,8 @@ stt_features -> stt_core
 stt_features -> scripts
 ```
 
-## Placement Guide
+## Placement Rule
 
-- `finish_recording_and_inject()`는 `stt_features`에 둔다.
-- `handle_stt_ptt_input()`은 runtime input을 feature event로 해석하는 경계 함수다.
-- `inject_transcript()`는 low-level PTY write와 feature message가 섞인 경계 함수다.
-- `parse_args()`는 `scripts`에 남긴다.
-- `transcribe_audio()`의 subprocess 호출은 `stt_runtime`에 둔다.
+- 여러 core/runtime 동작을 사용자 기능으로 묶으면 `stt_features`에 둔다.
+- CLI option parsing은 `stt_features`에 두지 않는다.
+- 외부 resource를 직접 조작하는 low-level adapter는 `stt_features`에 두지 않는다.
