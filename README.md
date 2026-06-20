@@ -33,13 +33,11 @@ Linux에서 Codex CLI 입력을 보조하기 위한 로컬 STT 실험 workspace.
 
 ```text
 terminal
-  -> scripts/stt_codex.py parent wrapper
-    -> child PTY: codex --no-alt-screen
-    -> parent status: [stt-parent] prefix
-    -> push-to-talk controller: ctrl+t
-    -> temporary audio recorder: arecord
-    -> local STT: scripts/transcribe.sh -> scripts/transcribe.py -> faster-whisper
-    -> raw transcript injector: child PTY input buffer
+  -> scripts/stt_codex.py thin CLI entrypoint
+    -> stt_features.codex_input
+      -> stt_runtime child PTY / terminal / recorder / STT subprocess / artifact adapters
+      -> stt_core command policy / key parsing / transcript policy / metadata contract
+        -> local STT: scripts/transcribe.sh -> scripts/transcribe.py -> faster-whisper
 ```
 
 Runtime flow:
@@ -74,11 +72,24 @@ Storage:
 
 Current core scripts:
 
-- `scripts/stt_codex.py`: 현재 메인 entrypoint. Codex child PTY, PTT, STT, transcript injection을 담당한다.
+- `scripts/stt_codex.py`: 현재 메인 entrypoint. CLI option과 backward-compatible wrapper surface를 담당한다.
 - `scripts/transcribe.sh`: venv/CUDA library path를 준비하고 `transcribe.py`를 실행한다.
 - `scripts/transcribe.py`: faster-whisper STT 실행을 담당한다.
 - `scripts/run_fixture_suite.sh`, `scripts/run_fixture_suite.py`: fixture regression을 담당한다.
 - `scripts/record.sh`, `scripts/push_to_talk.py`, `scripts/stt_clipboard.sh`, `scripts/record_clipboard.sh`, `scripts/copy_text.sh`: 보조 실행 흐름이다.
+
+Current mini-layer modules:
+
+- `stt_core/command.py`: Codex child command policy와 display formatting.
+- `stt_core/keyboard.py`: inject key sequence parsing.
+- `stt_core/transcript.py`: transcript text 여부 판단.
+- `stt_core/run_metadata.py`: run id와 metadata shape.
+- `stt_runtime/terminal.py`: terminal raw mode, cwd validation, window-size sync.
+- `stt_runtime/child_process.py`: child PTY spawn과 wait status 처리.
+- `stt_runtime/recording.py`: temporary WAV와 `arecord` recording lifecycle.
+- `stt_runtime/transcription.py`: `scripts/transcribe.sh` subprocess adapter.
+- `stt_runtime/run_artifacts.py`: `--save-run` artifact persistence.
+- `stt_features/codex_input.py`: fixed-text injection과 Ctrl+T STT injection flow.
 
 Mini-layer architecture contract:
 
