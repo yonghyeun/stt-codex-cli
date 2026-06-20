@@ -8,6 +8,15 @@ TypeScript로 점진 포팅한다.
 첫 포팅 대상은 deterministic transcript 비교 CLI다. STT runtime,
 faster-whisper 호출, PTY wrapper는 이번 범위에서 유지한다.
 
+## Current Ported Surface
+
+- `src/features/transcript-comparison`: Python `scripts/compare_transcript.py`의
+  normalize/exact 비교 의미를 TypeScript 순수 함수로 옮긴다.
+- `src/app/cli/compare-transcript.ts`: 파일 IO, argv parsing, stdout/stderr,
+  exit code를 담당한다.
+- `npm run compare-transcript -- expected.txt actual.txt`: normalized 비교.
+- `npm run compare-transcript -- --exact expected.txt actual.txt`: exact 비교.
+
 ## Source Boundary
 
 - `src/app/cli`: argv, file IO, stdout/stderr, exit code.
@@ -32,6 +41,15 @@ faster-whisper 호출, PTY wrapper는 이번 범위에서 유지한다.
 - 순수 로직은 fixture 없이 빠르게 검증한다.
 - CLI entrypoint는 exit code, stdout, stderr를 관찰 값으로 검증한다.
 - 기존 STT fixture regression은 Python/Bash suite를 유지한다.
+
+기본 검증 명령:
+
+```bash
+npm test
+npm run typecheck
+npm run lint
+npm run format:check
+```
 
 ## Porting Order
 

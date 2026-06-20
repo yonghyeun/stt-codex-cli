@@ -80,6 +80,13 @@ Current core scripts:
 - `scripts/run_fixture_suite.sh`, `scripts/run_fixture_suite.py`: fixture regression을 담당한다.
 - `scripts/record.sh`, `scripts/push_to_talk.py`, `scripts/stt_clipboard.sh`, `scripts/record_clipboard.sh`, `scripts/copy_text.sh`: 이전 prototype 또는 보조 흐름이다.
 
+Current TypeScript surface:
+
+- `src/README.md`: TypeScript source layout와 포팅 계약이다.
+- `docs/typescript-porting.md`: Python/Bash 병행 운영과 TS 포팅 순서를 정의한다.
+- `src/features/transcript-comparison`: transcript 비교 순수 로직이다.
+- `src/app/cli/compare-transcript.ts`: transcript 비교 Node CLI다.
+
 Deferred architecture:
 
 - token recovery는 기본 흐름에서 제외한다.
@@ -129,6 +136,32 @@ scripts/stt_codex.py --save-run --stt-model large-v3 --stt-device cuda --stt-com
 
 저장 결과는 `output/runs/YYYYMMDD-HHMMSS-mmm-stt-codex/` 아래에 남는다.
 
+## TypeScript Development
+
+설치:
+
+```bash
+npm install
+```
+
+검증:
+
+```bash
+npm test
+npm run typecheck
+npm run lint
+npm run format:check
+```
+
+TS transcript 비교 CLI:
+
+```bash
+npm run compare-transcript -- expected.txt actual.txt
+npm run compare-transcript -- --exact expected.txt actual.txt
+```
+
+현재 TS 코드는 기존 Python/Bash STT runtime을 대체하지 않는다. 결정적 보조 로직부터 포팅하며, 기존 fixture regression과 wrapper 실행 흐름은 유지한다.
+
 ## Pre-E2E Verification
 
 E2E 전에 확인할 수 있는 비마이크 검증:
@@ -136,6 +169,9 @@ E2E 전에 확인할 수 있는 비마이크 검증:
 ```bash
 python3 -m py_compile scripts/stt_codex.py
 scripts/stt_codex.py --help
+npm test
+npm run typecheck
+npm run lint
 ```
 
 한국어 fixture regression:
