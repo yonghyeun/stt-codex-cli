@@ -105,6 +105,98 @@ Deferred architecture:
 - 결과 전달은 child PTY에 텍스트를 삽입하는 방식으로 진행한다.
 - Codex CLI 자동 전송은 하지 않는다. Enter는 사용자가 직접 입력한다.
 
+## Current Usage
+
+기본 실행:
+
+```bash
+scripts/stt_codex.py
+```
+
+정확도 기준 모델을 명시:
+
+```bash
+scripts/stt_codex.py --stt-model large-v3 --stt-device cuda --stt-compute-type float16
+```
+
+실행 후 사용자는 `Ctrl+T`를 누르고 말한다. `Ctrl+T` 반복 입력이 끊기면 wrapper가 녹음을 종료하고 STT raw transcript를 Codex CLI 입력창에 삽입한다. Enter는 사용자가 직접 누른다.
+
+실제 발화 audio와 transcript를 남겨 비교해야 할 때만 저장 option을 켠다.
+
+```bash
+scripts/stt_codex.py --save-run --stt-model large-v3 --stt-device cuda --stt-compute-type float16
+```
+
+저장 결과는 `output/runs/YYYYMMDD-HHMMSS-mmm-stt-codex/` 아래에 남는다.
+
+## Pre-E2E Verification
+
+E2E 전에 확인할 수 있는 비마이크 검증:
+
+```bash
+python3 -m py_compile scripts/stt_codex.py
+scripts/stt_codex.py --help
+```
+
+한국어 fixture regression:
+
+```bash
+scripts/run_fixture_suite.sh fixtures/kss-ko-core-v1.json --model large-v3 --device cuda --compute-type float16
+```
+
+현재 기준 결과:
+
+- PASS 6/6.
+- exact 5/6.
+- normalized 6/6.
+- output: `output/suite/kss-ko-core-v1-large-v3-cuda-float16.json`.
+
+한영 혼합 accuracy risk 측정:
+
+```bash
+scripts/run_fixture_suite.sh fixtures/hike-code-switch-core-v1.json --model large-v3 --device cuda --compute-type float16 --require none
+scripts/analyze_code_switch_suite.py output/suite/hike-code-switch-core-v1-large-v3-cuda-float16.json
+```
+
+현재 기준 결과:
+
+- exact 0/5.
+- normalized 0/5.
+- Latin token preservation 14/28, 50%.
+- output: `output/suite/hike-code-switch-core-v1-large-v3-cuda-float16.json`.
+
+Wrapper smoke test:
+
+```bash
+scripts/stt_codex.py --stt-model tiny --stt-device cpu --stt-compute-type int8 --cmd python3 -- -q
+```
+
+이 smoke test는 wrapper 실행, child PTY, trigger 처리, STT 호출, empty transcript skip, 임시 audio 삭제를 확인한다. 실제 발화 품질은 확인하지 않는다.
+
+## Known Issues
+
+- 실제 마이크 입력 품질이 낮으면 STT 결과가 크게 나빠진다. 장비 교체 후 `--save-run`으로 audio와 transcript를 같이 확인한다.
+- `Ctrl+T` PTT는 terminal key repeat에 의존한다. tmux나 terminal 설정에 따라 control sequence가 예상과 다를 수 있다.
+- `--inject-key t`는 smoke test에 유용하지만 일반 typing과 충돌하므로 기본값으로 쓰지 않는다.
+- 한영 혼합 문장에서 `session`, `bug`, 파일명, option name 같은 Latin token이 한글 외래어 표기로 바뀔 수 있다.
+- token recovery, personal vocabulary, workspace metadata 기반 복원은 후속 기능이다.
+- STT 실행 중에는 wrapper event loop가 잠시 block될 수 있다.
+- `--save-run`은 실제 발화 audio와 transcript를 파일로 남긴다. 외부 공유 전 `output/` 확인이 필요하다.
+
+## E2E Test Gate
+
+E2E는 사용자가 실제 장비로 발화한 뒤 확인한다.
+
+통과 기준:
+
+- `scripts/stt_codex.py`가 Codex CLI를 child PTY로 실행한다.
+- 사용자가 `Ctrl+T`를 누르고 말하면 recording start/stop이 표시된다.
+- STT raw transcript가 Codex CLI 입력창에 삽입된다.
+- Enter는 자동 전송되지 않는다.
+- 사용자가 삽입된 문장을 수정하거나 그대로 Enter로 전송할 수 있다.
+- 기본 실행에서는 audio와 transcript가 영구 저장되지 않는다.
+- `--save-run`을 켠 경우에만 `output/runs/`에 run artifact가 남는다.
+
 ## Local Baseline
 
 2026-06-19 현재 확인한 로컬 기준:
