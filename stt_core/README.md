@@ -45,9 +45,8 @@ stt_core -> stt_features
 
 ## Placement Guide
 
-- `transcript_has_text()` 같은 판정은 `stt_core` 후보다.
-- `run_id_from_timestamp()` 같은 이름 생성은 `stt_core` 후보다.
+- `transcript_has_text()` 같은 판정은 `stt_core`에 둔다.
+- `run_id_from_timestamp()` 같은 이름 생성은 `stt_core`에 둔다.
 - `save_run_artifacts()`처럼 실제 파일을 쓰는 함수는 `stt_core`가 아니다.
-- `subprocess.run(...)`이 필요하면 `stt_runtime` 후보다.
-- 녹음부터 삽입까지의 전체 흐름을 말하면 `stt_features` 후보다.
-
+- `subprocess.run(...)`이 필요하면 `stt_runtime`에 둔다.
+- 녹음부터 삽입까지의 전체 흐름은 `stt_features`에 둔다.

@@ -42,9 +42,8 @@ stt_features -> scripts
 
 ## Placement Guide
 
-- `finish_recording_and_inject()`는 `stt_features` 후보다.
-- `handle_stt_ptt_input()`은 runtime input을 feature event로 해석하므로 migration 때 경계 재검토가 필요하다.
-- `inject_transcript()`는 low-level PTY write와 feature message가 섞여 있으므로 migration 때 split 후보다.
+- `finish_recording_and_inject()`는 `stt_features`에 둔다.
+- `handle_stt_ptt_input()`은 runtime input을 feature event로 해석하는 경계 함수다.
+- `inject_transcript()`는 low-level PTY write와 feature message가 섞인 경계 함수다.
 - `parse_args()`는 `scripts`에 남긴다.
 - `transcribe_audio()`의 subprocess 호출은 `stt_runtime`에 둔다.
-

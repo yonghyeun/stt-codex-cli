@@ -46,9 +46,8 @@ stt_runtime -> stt_features
 
 ## Placement Guide
 
-- `start_recording()`과 `stop_recording()`은 `stt_runtime` 후보다.
-- `transcribe_audio()`의 subprocess adapter는 `stt_runtime` 후보다.
-- `spawn_child()`와 `TerminalMode`는 `stt_runtime` 후보다.
-- `transcript_has_text()`는 `stt_runtime`이 아니라 `stt_core` 후보다.
-- `finish_recording_and_inject()`처럼 흐름을 조립하는 함수는 `stt_features` 후보다.
-
+- `start_recording()`과 `stop_recording()`은 `stt_runtime`에 둔다.
+- `transcribe_audio()`의 subprocess adapter는 `stt_runtime`에 둔다.
+- `spawn_child()`와 `TerminalMode`는 `stt_runtime`에 둔다.
+- `transcript_has_text()`는 `stt_runtime`이 아니라 `stt_core`에 둔다.
+- `finish_recording_and_inject()`처럼 흐름을 조립하는 함수는 `stt_features`에 둔다.
