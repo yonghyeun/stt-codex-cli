@@ -4,7 +4,15 @@
 
 ## Goal
 
-실제 Codex CLI 입력 보조에 가까운 사용자 발화를 수집해 STT 정확도를 측정한다.
+실제 Codex CLI 입력 보조에 가까운 사용자 발화를 선택해 STT 정확도를 측정한다.
+
+## Input Set
+
+- `input_set`: `speech/v1`
+- input owner: `evals/inputs/speech/v1/`
+- sample owner: `evals/inputs/speech/v1/samples/<sample_id>/`
+
+suite는 input을 복사하지 않는다. `manifest.json`에서 `input_set`과 `sample_id`만 참조한다.
 
 ## Categories
 
@@ -36,26 +44,28 @@
 - `evals/stt_accuracy/suites/codex-command-accuracy-v1/README.md`
 - `evals/stt_accuracy/suites/codex-command-accuracy-v1/manifest.schema.json`
 - `evals/stt_accuracy/suites/codex-command-accuracy-v1/manifest.example.json`
+- `evals/stt_accuracy/suites/codex-command-accuracy-v1/manifest.json`
 
-Tracked collected source:
+공유 input source:
 
-- `evals/stt_accuracy/output/corpus/<sample_id>/`
-- `evals/stt_accuracy/output/suites/codex-command-accuracy-v1/manifest.local.json`
+- `evals/inputs/speech/v1/manifest.json`
+- `evals/inputs/speech/v1/samples/<sample_id>/expected.txt`
+- `evals/inputs/speech/v1/samples/<sample_id>/metadata.json`
 
-Local-only execution artifact:
+Local-only artifact:
 
-- `evals/stt_accuracy/output/corpus/<sample_id>/audio.wav`
-- `evals/stt_accuracy/output/runs/<run_id>/`
+- `evals/inputs/speech/v1/samples/<sample_id>/audio.wav`
+- `evals/stt_accuracy/runs/<run_id>/`
 
 ## Manifest Rule
 
-`manifest.local.json`은 실제 sample id를 참조한다.
+`manifest.json`은 실제 sample id를 참조한다.
 
-suite는 WAV, expected transcript, raw transcript를 소유하지 않는다. 해당 파일들은 `evals/stt_accuracy/output/corpus/<sample_id>/`가 소유한다.
+suite는 WAV, expected transcript, sample metadata, raw transcript를 소유하지 않는다.
 
-`audio.wav`는 local-only다. `expected.txt`, `metadata.json`, `manifest.local.json`은 공개 가능한 baseline source로 Git에 추적한다.
+`audio.wav`는 local-only다. `expected.txt`, `metadata.json`, `manifest.json`은 공개 가능한 source로 Git에 추적한다.
 
-sample 내용이 바뀌면 기존 sample id를 수정하지 말고 새 sample id를 만든다.
+sample 내용이 바뀌면 기존 sample id를 수정하지 말고 새 input version 또는 새 sample id를 만든다.
 
 ## Baseline Rule
 

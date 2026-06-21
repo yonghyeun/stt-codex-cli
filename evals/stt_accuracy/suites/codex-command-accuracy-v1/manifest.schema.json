@@ -3,7 +3,7 @@
   "$id": "https://github.com/yonghyeun/stt-codex-cli/evals/stt_accuracy/suites/codex-command-accuracy-v1/manifest.schema.json",
   "title": "Codex Command Accuracy Suite Manifest",
   "type": "object",
-  "required": ["suite_id", "version", "cases"],
+  "required": ["suite_id", "input_set", "version", "cases"],
   "additionalProperties": false,
   "properties": {
     "$schema": {
@@ -11,6 +11,9 @@
     },
     "suite_id": {
       "const": "codex-command-accuracy-v1"
+    },
+    "input_set": {
+      "const": "speech/v1"
     },
     "version": {
       "type": "integer",

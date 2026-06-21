@@ -1,0 +1,32 @@
+{
+  "$schema": "./manifest.schema.json",
+  "input_set": "speech/v1",
+  "version": 1,
+  "description": "Speech input v1 sample inventory migrated from issue #12 corpus collection.",
+  "sample_ids": [
+    "cmd-0001",
+    "cmd-0002",
+    "cmd-0003",
+    "cmd-0004",
+    "cmd-0005",
+    "cmd-0006",
+    "cmd-0007",
+    "cmd-0008",
+    "cmd-0009",
+    "cmd-0010",
+    "cmd-0011",
+    "cmd-0012",
+    "cmd-0013",
+    "cmd-0014",
+    "cmd-0015",
+    "cmd-0016",
+    "cmd-0017",
+    "cmd-0018",
+    "cmd-0019",
+    "cmd-0020",
+    "cmd-0021",
+    "cmd-0022",
+    "cmd-0023",
+    "cmd-0024"
+  ]
+}

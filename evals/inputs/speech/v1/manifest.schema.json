@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/yonghyeun/stt-codex-cli/evals/inputs/speech/v1/manifest.schema.json",
+  "title": "Speech Input v1 Manifest",
+  "type": "object",
+  "required": ["input_set", "version", "sample_ids"],
+  "additionalProperties": false,
+  "properties": {
+    "$schema": {
+      "type": "string"
+    },
+    "input_set": {
+      "const": "speech/v1"
+    },
+    "version": {
+      "const": 1
+    },
+    "description": {
+      "type": "string"
+    },
+    "sample_ids": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "pattern": "^cmd-[0-9]{4}$"
+      }
+    }
+  }
+}

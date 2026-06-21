@@ -1,12 +1,12 @@
 output/*
 !output/.gitkeep
-evals/**/output/corpus/**/audio.wav
-evals/**/output/runs/**
+evals/**/runs/**
 fixtures/generated/
 *.wav
 *.mp3
 *.m4a
 *.flac
+evals/inputs/speech/**/samples/**/audio.wav
 *.log
 .venv/
 __pycache__/
