@@ -1,8 +1,9 @@
 {
   "$schema": "./manifest.schema.json",
   "suite_id": "codex-command-accuracy-v1",
+  "input_set": "speech/v1",
   "version": 1,
-  "description": "Example shape only. Real user samples stay in evals/stt_accuracy/output/**.",
+  "description": "Example shape only. Real user samples stay in evals/inputs/speech/v1/**.",
   "cases": [
     {
       "case_id": "file-path-001",
