@@ -25,6 +25,44 @@ CUDA 실행이 필요하면 추가 설치한다.
 
 `scripts/transcribe.sh`는 venv에 설치된 CUDA library path를 자동으로 `LD_LIBRARY_PATH`에 추가한다.
 
+## STT Accuracy Baseline Harness
+
+`codex-command-accuracy-v1` baseline 실행 전에는 dry-run으로 suite와 input 연결을
+검증한다.
+
+```bash
+scripts/run_stt_accuracy_suite.py \
+  --suite codex-command-accuracy-v1 \
+  --input-root evals/inputs/speech/v1 \
+  --run-id 20260621-large-v3-cuda-float16-baseline \
+  --model large-v3 \
+  --device cuda \
+  --compute-type float16 \
+  --language ko \
+  --dry-run
+```
+
+실제 baseline 실행은 `--dry-run`만 제거한다.
+
+```bash
+scripts/run_stt_accuracy_suite.py \
+  --suite codex-command-accuracy-v1 \
+  --input-root evals/inputs/speech/v1 \
+  --run-id 20260621-large-v3-cuda-float16-baseline \
+  --model large-v3 \
+  --device cuda \
+  --compute-type float16 \
+  --language ko
+```
+
+- dry-run은 모델을 load하지 않는다.
+- dry-run은 `audio.wav`, `expected.txt`, `metadata.json`, suite case mapping, run path 계획을 확인한다.
+- 실행 결과는 `evals/stt_accuracy/runs/<run_id>/` 아래에 local-only로 남긴다.
+- raw transcript는 `raw/<sample_id>.txt`에 쓴다.
+- baseline에서는 token recovery를 쓰지 않으며 `recovered/<sample_id>.txt`는 raw와 같은 텍스트를 쓴다.
+- `result.json`은 metric 결과와 failure taxonomy summary를 소유한다.
+- Git-tracked report에는 raw transcript 전체를 붙이지 않는다.
+
 ## Prototype 8: Manual Token Recovery
 
 수동 memory에 등록된 표현만 복원한다.

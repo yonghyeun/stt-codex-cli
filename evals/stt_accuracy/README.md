@@ -92,6 +92,43 @@ evals/stt_accuracy/suites/codex-command-accuracy-v1/
 
 `manifest.json`은 `input_set: "speech/v1"`과 `sample_id`로 입력을 참조한다.
 
+## Baseline Harness Contract
+
+Phase 2 baseline 실행은 하네스 계약을 먼저 따른다.
+
+Canonical dry-run:
+
+```bash
+scripts/run_stt_accuracy_suite.py \
+  --suite codex-command-accuracy-v1 \
+  --input-root evals/inputs/speech/v1 \
+  --run-id 20260621-large-v3-cuda-float16-baseline \
+  --model large-v3 \
+  --device cuda \
+  --compute-type float16 \
+  --language ko \
+  --dry-run
+```
+
+Canonical baseline config:
+
+- `suite_id`: `codex-command-accuracy-v1`.
+- `input_set`: `speech/v1`.
+- `model`: `large-v3`.
+- `device`: `cuda`.
+- `compute_type`: `float16`.
+- `language`: `ko`.
+- `initial_prompt`: 없음.
+- `token_recovery`: `none`.
+
+`--dry-run`은 모델을 load하지 않는다. dry-run은 suite manifest, input manifest,
+sample folder, `audio.wav`, `expected.txt`, `metadata.json`, case 순서, run output
+path 계획만 검증하고 JSON plan을 stdout에 출력한다.
+
+새 worktree에 ignored `audio.wav`가 없으면 `--input-root`로 실제 local audio가 있는
+input root를 명시한다. tracked suite manifest와 local audio artifact는 분리될 수
+있지만, `sample_id` 계약은 같아야 한다.
+
 ## Run Artifact Contract
 
 실행 결과는 run id 단위로 보존한다.
@@ -112,6 +149,49 @@ evals/stt_accuracy/runs/<run_id>/
 - `metadata.json`: model, prompt, recovery policy, suite id, input set, 실행 시각 같은 run metadata.
 
 run artifact는 local-only다. 같은 speech input을 여러 model, prompt, recovery 정책으로 반복 실행해도 이전 결과를 덮어쓰지 않는다.
+
+Baseline run의 `result.json` 최소 field:
+
+- `schema_version`
+- `suite_id`
+- `input_set`
+- `run_id`
+- `config`
+- `elapsed_seconds`
+- `total`
+- `failed`
+- `category_summary`
+- `failure_summary`
+- `cases`
+
+Baseline run의 `metadata.json` 최소 field:
+
+- `schema_version`
+- `run_id`
+- `suite_id`
+- `input_set`
+- `started_at_utc`
+- `completed_at_utc`
+- `config`
+- `artifact_contract`
+
+Baseline은 token recovery를 적용하지 않는다. `recovered/<sample_id>.txt`는 같은 run
+schema를 유지하기 위한 후처리 산출물 위치이며, baseline에서는 raw와 동일한 텍스트를
+쓴다. baseline report는 raw transcript 전체를 Git-tracked report에 복사하지 않는다.
+
+## Failure Taxonomy
+
+하네스는 case별 `failure_types`를 같은 이름으로 기록한다.
+
+- `korean_command_mismatch`: 한국어 명령의 normalized match 실패.
+- `latin_token_loss`: expected의 Latin-script token 보존 실패.
+- `file_path_loss`: 파일명 또는 경로 token 보존 실패.
+- `cli_option_loss`: `--option` 형태 CLI option 보존 실패.
+- `code_identifier_loss`: 함수명, 모듈명, snake_case, dotted identifier 보존 실패.
+- `hallucination`: expected에 없는 Latin-script token이 raw transcript에 추가됨.
+- `empty_transcript`: raw transcript가 비어 있음.
+- `punctuation_only`: raw transcript가 문장부호뿐임.
+- `insertion_unsafe`: Codex CLI 입력창에 삽입할 최소 텍스트 조건을 만족하지 못함.
 
 ## Artifact Policy
 
