@@ -1,11 +1,12 @@
 # Evals
 
-평가 트랙의 계약, suite 정의, report 위치.
+평가 입력 데이터와 평가 트랙의 계약, suite 정의, report 위치.
 
 `evals/`는 반복 실행 가능한 평가 작업의 source tree다. 단순 실험 기록은 `experiments/`에 둘 수 있지만, baseline, suite, metric, report처럼 후속 작업이 계속 소비하는 표면은 `evals/`에 둔다.
 
 ## Ownership
 
+- 여러 평가 트랙이 재사용할 수 있는 versioned input corpus.
 - 평가 트랙별 canonical contract.
 - 공개 가능한 suite manifest와 schema 설명.
 - metric 정의.
@@ -21,7 +22,14 @@
 - 다음 작업 queue.
 - remote handoff projection.
 
-local artifact는 각 eval track의 `output/` 또는 `memory/*.local.json`에 둔다. 다음 작업 queue와 handoff projection은 GitHub issue graph가 소유한다.
+local artifact는 각 eval track의 `runs/` 또는 `memory/*.local.json`에 둔다. 다음 작업 queue와 handoff projection은 GitHub issue graph가 소유한다.
+
+## Inputs
+
+- `inputs/`: 특정 평가 트랙에 종속되지 않는 공유 입력 데이터.
+- `inputs/speech/v1/`: 첫 speech input corpus snapshot.
+
+입력 데이터는 test 종류, suite version, run id 아래에 두지 않는다. 같은 speech sample은 STT accuracy, token recovery, model option eval 같은 여러 평가 트랙에서 재사용할 수 있어야 한다.
 
 ## Tracks
 
