@@ -1,0 +1,11 @@
+{
+  "sample_id": "cmd-0004",
+  "prompt_id": "P04",
+  "category": "korean_command",
+  "metrics": [
+    "korean_command_match",
+    "insertion_safe"
+  ],
+  "recording_status": "recorded",
+  "transcription_status": "not_run"
+}

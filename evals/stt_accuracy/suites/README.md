@@ -7,6 +7,7 @@
 - suite naming.
 - manifest schema 설명.
 - example manifest.
+- 수집된 suite case manifest.
 - 공개 가능 여부 정책.
 - sample id 참조 규칙.
 - suite별 README.
@@ -14,13 +15,12 @@
 ## Non-Ownership
 
 - 실제 audio 저장.
-- expected transcript 저장.
 - raw transcript 저장.
 - recovered transcript 저장.
 - raw result 저장.
 - 개인 glossary 저장.
 
-위 산출물은 `evals/stt_accuracy/output/**` 또는 `memory/*.local.json`에 둔다.
+위 산출물은 `evals/stt_accuracy/output/runs/**` 또는 `memory/*.local.json`에 둔다.
 
 ## Manifest Rules
 
@@ -30,13 +30,15 @@ Git에 두는 것:
 evals/stt_accuracy/suites/codex-command-accuracy-v1/
   manifest.schema.json
   manifest.example.json
+evals/stt_accuracy/output/suites/codex-command-accuracy-v1/
+  manifest.local.json
 ```
 
 local-only로 두는 것:
 
 ```text
-evals/stt_accuracy/output/suites/codex-command-accuracy-v1/
-  manifest.local.json
+evals/stt_accuracy/output/corpus/<sample_id>/audio.wav
+evals/stt_accuracy/output/runs/<run_id>/
 ```
 
 `manifest.local.json`은 실제 sample id를 참조한다.

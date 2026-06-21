@@ -1,0 +1,1 @@
+RecordingState active 상태 전환이 어디서 일어나는지 찾아줘

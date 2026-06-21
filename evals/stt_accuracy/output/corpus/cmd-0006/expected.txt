@@ -1,0 +1,1 @@
+manifest local json schema validation 커맨드 만들어줘

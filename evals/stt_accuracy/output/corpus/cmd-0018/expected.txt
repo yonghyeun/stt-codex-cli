@@ -1,0 +1,1 @@
+transcript_has_text 판단이 빈 문자열을 어떻게 처리하는지 봐줘

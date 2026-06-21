@@ -1,0 +1,1 @@
+scripts/transcribe.sh 실행 경로와 옵션을 README에서 찾아줘

@@ -1,0 +1,1 @@
+STT accuracy eval 쪽 contract 다시 읽어줘
