@@ -1,6 +1,26 @@
 # Fixtures
 
-재현 가능한 STT 검증용 로컬 fixture 위치.
+재현 가능한 STT 검증용 legacy fixture 위치.
+
+새 평가 트랙은 `evals/` 아래에 둔다. 특히 `#9` STT 정확도 개선 트랙의 active baseline은 `evals/stt_accuracy/`에서 관리한다.
+
+## Legacy / Stale Fixture Policy
+
+기존 KSS, HiKE, token-recovery fixture는 `#9` 정확도 개선 트랙의 active baseline이 아니다.
+
+기존 fixture의 용도:
+
+- 과거 실험 참고값.
+- runner smoke 확인.
+- 회귀 비교용 historical reference.
+- 일반 한국어 STT 또는 code-switch risk의 보조 자료.
+
+기존 fixture의 금지 용도:
+
+- 새 정확도 트랙의 성공 기준으로 사용하지 않는다.
+- `codex-command-accuracy-v1`의 대체 기준으로 사용하지 않는다.
+- 실제 사용자의 Codex 명령형 발화 수집을 생략하는 근거로 사용하지 않는다.
+- 기존 fixture 결과만으로 Phase 1 이후 개선 여부를 판단하지 않는다.
 
 ## Token Recovery Fixture
 

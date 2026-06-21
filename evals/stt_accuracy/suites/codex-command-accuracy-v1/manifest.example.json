@@ -1,0 +1,20 @@
+{
+  "$schema": "./manifest.schema.json",
+  "suite_id": "codex-command-accuracy-v1",
+  "version": 1,
+  "description": "Example shape only. Real user samples stay in evals/stt_accuracy/output/**.",
+  "cases": [
+    {
+      "case_id": "file-path-001",
+      "sample_id": "cmd-0001",
+      "category": "file_path",
+      "metrics": ["file_path_preservation", "insertion_safe"]
+    },
+    {
+      "case_id": "cli-option-001",
+      "sample_id": "cmd-0002",
+      "category": "cli_option",
+      "metrics": ["cli_option_preservation", "latin_token_preservation", "insertion_safe"]
+    }
+  ]
+}

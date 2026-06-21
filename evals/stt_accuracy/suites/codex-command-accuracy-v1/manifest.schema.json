@@ -1,0 +1,68 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/yonghyeun/stt-codex-cli/evals/stt_accuracy/suites/codex-command-accuracy-v1/manifest.schema.json",
+  "title": "Codex Command Accuracy Suite Manifest",
+  "type": "object",
+  "required": ["suite_id", "version", "cases"],
+  "additionalProperties": false,
+  "properties": {
+    "$schema": {
+      "type": "string"
+    },
+    "suite_id": {
+      "const": "codex-command-accuracy-v1"
+    },
+    "version": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "description": {
+      "type": "string"
+    },
+    "cases": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["case_id", "sample_id", "category", "metrics"],
+        "additionalProperties": false,
+        "properties": {
+          "case_id": {
+            "type": "string",
+            "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*-[0-9]{3}$"
+          },
+          "sample_id": {
+            "type": "string",
+            "pattern": "^cmd-[0-9]{4}$"
+          },
+          "category": {
+            "enum": [
+              "korean_command",
+              "code_switch",
+              "file_path",
+              "cli_option",
+              "code_identifier",
+              "long_form"
+            ]
+          },
+          "metrics": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": {
+              "enum": [
+                "korean_command_match",
+                "latin_token_preservation",
+                "file_path_preservation",
+                "cli_option_preservation",
+                "code_identifier_preservation",
+                "hallucination_count",
+                "insertion_safe"
+              ]
+            }
+          }
+        }
+      }
+    }
+  }
+}
