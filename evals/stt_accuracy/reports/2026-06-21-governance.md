@@ -39,7 +39,6 @@ evals/
         cmd-0001/
           audio.wav
           expected.txt
-          raw.txt
           metadata.json
       suites/
         codex-command-accuracy-v1/
@@ -56,7 +55,7 @@ evals/
 - `evals/stt_accuracy/suites/README.md`: suite와 manifest contract.
 - `evals/stt_accuracy/suites/codex-command-accuracy-v1/README.md`: 첫 active suite contract.
 - `evals/stt_accuracy/reports/`: local evidence와 결정 요약.
-- `evals/stt_accuracy/output/README.md`: local-only artifact tree contract.
+- `evals/stt_accuracy/output/README.md`: sample source와 local artifact tree contract.
 - `fixtures/README.md`: legacy/reference fixture 경계.
 - GitHub issue: 진행 상태, sequencing, handoff projection.
 
@@ -67,10 +66,12 @@ evals/
 | `evals/stt_accuracy/` | 정확도 평가 contract, suite, report | 가능 |
 | `evals/stt_accuracy/suites/**` | 공개 가능한 suite 정의와 manifest schema/example | 가능 |
 | `evals/stt_accuracy/reports/**` | 요약 report와 결정 기록 | 가능 |
+| `evals/stt_accuracy/output/corpus/**/expected.txt` | 공개 가능한 expected transcript | 가능 |
+| `evals/stt_accuracy/output/corpus/**/metadata.json` | 공개 가능한 sample metadata | 가능 |
+| `evals/stt_accuracy/output/suites/**/manifest.local.json` | 실제 sample id를 참조하는 collected manifest | 가능 |
 | `fixtures/**` | legacy/reference fixture | 가능 |
 | `fixtures/generated/**` | 기존 legacy 생성물 | 금지 |
-| `evals/stt_accuracy/output/corpus/**` | 실제 sample audio/transcript/metadata | 금지 |
-| `evals/stt_accuracy/output/suites/**/manifest.local.json` | 실제 sample id를 참조하는 local manifest | 금지 |
+| `evals/stt_accuracy/output/corpus/**/audio.wav` | 실제 사용자 음성 | 금지 |
 | `evals/stt_accuracy/output/runs/**` | suite 실행 결과 | 금지 |
 | `output/runs/**` | wrapper run artifact | 금지 |
 | `memory/*.local.json` | 개인 token memory | 금지 |
@@ -78,7 +79,7 @@ evals/
 ## Ownership Rules
 
 - WAV는 suite가 소유하지 않는다.
-- expected transcript도 suite가 소유하지 않는다.
+- expected transcript는 corpus sample source가 소유한다.
 - raw transcript도 suite가 소유하지 않는다.
 - sample data는 `evals/stt_accuracy/output/corpus/<sample_id>/`가 소유한다.
 - suite는 `sample_id`만 참조한다.

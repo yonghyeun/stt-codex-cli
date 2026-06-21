@@ -1,0 +1,12 @@
+{
+  "sample_id": "cmd-0010",
+  "prompt_id": "P10",
+  "category": "file_path",
+  "metrics": [
+    "file_path_preservation",
+    "latin_token_preservation",
+    "insertion_safe"
+  ],
+  "recording_status": "recorded",
+  "transcription_status": "not_run"
+}

@@ -37,10 +37,14 @@
 - `evals/stt_accuracy/suites/codex-command-accuracy-v1/manifest.schema.json`
 - `evals/stt_accuracy/suites/codex-command-accuracy-v1/manifest.example.json`
 
-Local-only execution artifact:
+Tracked collected source:
 
 - `evals/stt_accuracy/output/corpus/<sample_id>/`
 - `evals/stt_accuracy/output/suites/codex-command-accuracy-v1/manifest.local.json`
+
+Local-only execution artifact:
+
+- `evals/stt_accuracy/output/corpus/<sample_id>/audio.wav`
 - `evals/stt_accuracy/output/runs/<run_id>/`
 
 ## Manifest Rule
@@ -48,6 +52,8 @@ Local-only execution artifact:
 `manifest.local.json`은 실제 sample id를 참조한다.
 
 suite는 WAV, expected transcript, raw transcript를 소유하지 않는다. 해당 파일들은 `evals/stt_accuracy/output/corpus/<sample_id>/`가 소유한다.
+
+`audio.wav`는 local-only다. `expected.txt`, `metadata.json`, `manifest.local.json`은 공개 가능한 baseline source로 Git에 추적한다.
 
 sample 내용이 바뀌면 기존 sample id를 수정하지 말고 새 sample id를 만든다.
 

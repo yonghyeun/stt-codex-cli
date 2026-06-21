@@ -1,0 +1,1 @@
+evals/stt_accuracy/README.md 열어서 ownership rule 확인해줘

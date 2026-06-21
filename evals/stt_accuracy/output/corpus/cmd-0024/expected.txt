@@ -1,0 +1,1 @@
+Phase 2에서 바로 baseline을 실행할 수 있도록 category와 metric mapping이 빠진 case가 없는지 확인해줘

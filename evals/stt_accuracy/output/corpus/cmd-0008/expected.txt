@@ -1,0 +1,1 @@
+local artifact랑 git tracked report 경계를 다시 확인해줘

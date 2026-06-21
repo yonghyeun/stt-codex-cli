@@ -1,0 +1,11 @@
+{
+  "sample_id": "cmd-0006",
+  "prompt_id": "P06",
+  "category": "code_switch",
+  "metrics": [
+    "latin_token_preservation",
+    "insertion_safe"
+  ],
+  "recording_status": "recorded",
+  "transcription_status": "not_run"
+}

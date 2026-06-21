@@ -1,0 +1,1 @@
+--stt-model large-v3 --stt-device cuda --stt-compute-type float16 조합으로 실행해줘

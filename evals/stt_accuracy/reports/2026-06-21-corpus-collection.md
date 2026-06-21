@@ -4,7 +4,7 @@
 
 이 문서는 `#9` STT 정확도 개선 트랙의 Phase 1 수집 요약이다.
 
-실제 sample artifact는 local-only다. 이 report는 Git에 남길 수 있는 익명화된 evidence만 기록한다.
+실제 audio는 local-only다. expected transcript, metadata, collected manifest는 공개 가능한 baseline source로 Git에 추적한다.
 
 ## Collection Summary
 
@@ -15,6 +15,7 @@
 - Manifest cases: 24
 - Raw STT output: not generated in this phase
 - Run artifact owner for raw output: `evals/stt_accuracy/output/runs/<run_id>/`
+- Ignored corpus files: `audio.wav` only
 
 ## Category Coverage
 
@@ -29,7 +30,7 @@
 
 ## Local Artifact Layout
 
-각 sample은 local-only로 아래 파일을 가진다.
+각 sample은 아래 source 파일을 가진다.
 
 ```text
 evals/stt_accuracy/output/corpus/<sample_id>/
@@ -46,6 +47,8 @@ evals/stt_accuracy/output/suites/codex-command-accuracy-v1/manifest.local.json
 
 `corpus/<sample_id>/raw.txt`는 사용하지 않는다. 같은 audio를 여러 model, prompt, recovery 정책으로 반복 실행해야 하므로 raw STT output은 실행별 run artifact로 둔다.
 
+`audio.wav`만 local-only로 두고, `expected.txt`, `metadata.json`, `manifest.local.json`은 Git에 추적한다.
+
 ## Validation
 
 Executed checks:
@@ -55,7 +58,8 @@ find evals/stt_accuracy/output/corpus -mindepth 2 -maxdepth 2 -name audio.wav | 
 python3 -m json.tool evals/stt_accuracy/output/suites/codex-command-accuracy-v1/manifest.local.json
 jsonschema validation against evals/stt_accuracy/suites/codex-command-accuracy-v1/manifest.schema.json
 ffprobe duration check for every audio.wav
-git check-ignore for audio, expected transcript, metadata, and manifest.local.json
+git check-ignore for audio
+git check-ignore negative check for expected transcript, metadata, and manifest.local.json
 ```
 
 Results:
@@ -65,7 +69,8 @@ Results:
 - Manifest JSON: passed
 - Manifest schema: passed
 - Required local source files: passed
-- Ignored artifact check: passed
+- Ignored audio check: passed
+- Tracked text source check: passed
 - `raw.txt` placeholder count: 0
 
 Duration summary:
@@ -77,15 +82,18 @@ Duration summary:
 
 ## Privacy
 
-Git-tracked report는 실제 발화 원문, 음성 파일, local manifest 내용을 포함하지 않는다.
+Git-tracked source는 실제 음성 파일을 포함하지 않는다.
 
 Git 추적 금지 대상:
 
 - `evals/stt_accuracy/output/corpus/**/audio.wav`
+- `evals/stt_accuracy/output/runs/**`
+
+Git 추적 대상:
+
 - `evals/stt_accuracy/output/corpus/**/expected.txt`
 - `evals/stt_accuracy/output/corpus/**/metadata.json`
 - `evals/stt_accuracy/output/suites/**/manifest.local.json`
-- `evals/stt_accuracy/output/runs/**`
 
 ## Phase 2 Input
 

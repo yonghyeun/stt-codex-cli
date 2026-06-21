@@ -1,0 +1,12 @@
+{
+  "sample_id": "cmd-0014",
+  "prompt_id": "P14",
+  "category": "cli_option",
+  "metrics": [
+    "cli_option_preservation",
+    "latin_token_preservation",
+    "insertion_safe"
+  ],
+  "recording_status": "recorded",
+  "transcription_status": "not_run"
+}

@@ -1,0 +1,11 @@
+{
+  "sample_id": "cmd-0022",
+  "prompt_id": "P22",
+  "category": "long_form",
+  "metrics": [
+    "latin_token_preservation",
+    "insertion_safe"
+  ],
+  "recording_status": "recorded",
+  "transcription_status": "not_run"
+}

@@ -1,0 +1,1 @@
+run_id_from_timestamp 출력 형식이 manifest에 필요한지 확인해줘

@@ -23,7 +23,9 @@ Codex CLI 입력 보조 목적의 STT 정확도 평가 트랙.
 정확도 평가 트랙은 `evals/stt_accuracy/` 안에서 source contract와 local artifact를 함께 소유한다.
 
 - `evals/stt_accuracy/`는 평가 source tree다.
-- `evals/stt_accuracy/output/`는 실제 sample과 실행 결과를 담는 local-only artifact tree다.
+- `evals/stt_accuracy/output/`는 평가 sample source와 실행 결과를 담는 artifact tree다.
+- `evals/stt_accuracy/output/corpus/**/audio.wav`와 `evals/stt_accuracy/output/runs/**`는 local-only다.
+- `expected.txt`, `metadata.json`, `manifest.local.json`은 공개 가능한 baseline 계약이면 Git에 추적한다.
 - `fixtures/`는 기존 KSS/HiKE/token-recovery 같은 legacy/reference fixture 위치다.
 - 새 정확도 트랙의 active baseline은 `fixtures/`가 아니라 `evals/stt_accuracy/` contract와 `evals/stt_accuracy/output/` local data 조합으로 관리한다.
 
@@ -48,7 +50,7 @@ evals/
 
 `evals/stt_accuracy/README.md`는 정확도 평가 트랙의 canonical contract다.
 
-`suites/`는 suite contract, manifest schema, example manifest를 소유한다. 실제 사용자 발화 manifest는 Git에 두지 않는다.
+`suites/`는 suite contract, manifest schema, example manifest를 소유한다. 실제 수집된 suite case manifest는 `evals/stt_accuracy/output/suites/<suite_id>/manifest.local.json`에 둔다.
 
 ## Local Artifact Contract
 
@@ -60,12 +62,10 @@ evals/
         cmd-0001/
           audio.wav
           expected.txt
-          raw.txt
           metadata.json
         cmd-0002/
           audio.wav
           expected.txt
-          raw.txt
           metadata.json
       suites/
         codex-command-accuracy-v1/
@@ -82,7 +82,6 @@ evals/
 evals/stt_accuracy/output/corpus/<sample_id>/
   audio.wav
   expected.txt
-  raw.txt
   metadata.json
 ```
 
@@ -110,7 +109,8 @@ issue comment는 결정 로그와 handoff다. 오래 유지되는 contract는 re
 ## Ownership Rules
 
 - WAV는 suite가 소유하지 않는다.
-- expected transcript도 suite가 소유하지 않는다.
+- expected transcript는 corpus sample source가 소유한다.
+- sample metadata는 corpus sample source가 소유한다.
 - raw transcript도 suite가 소유하지 않는다.
 - sample data는 `evals/stt_accuracy/output/corpus/<sample_id>/`가 소유한다.
 - suite는 `sample_id`만 참조한다.
@@ -125,26 +125,26 @@ Git 추적 대상:
 - `evals/stt_accuracy/**/README.md`.
 - `manifest.schema.json`.
 - `manifest.example.json`.
+- `evals/stt_accuracy/output/corpus/**/expected.txt`.
+- `evals/stt_accuracy/output/corpus/**/metadata.json`.
+- `evals/stt_accuracy/output/suites/**/manifest.local.json`.
 - 익명화된 report summary.
 - metric 정의.
 
 Git 추적 금지:
 
-- `evals/stt_accuracy/output/corpus/**`.
-- `evals/stt_accuracy/output/suites/**/manifest.local.json`.
+- `evals/stt_accuracy/output/corpus/**/audio.wav`.
 - `evals/stt_accuracy/output/runs/**`.
 - 실제 사용자 발화 audio.
-- expected transcript.
 - raw transcript.
 - recovered transcript.
-- sample metadata.
 - 개인 glossary.
 
 ## Fixture Policy
 
 새 정확도 트랙에서는 top-level `fixtures/generated/`를 사용하지 않는다.
 
-평가 입력 계약은 `evals/stt_accuracy/suites/**`가 소유한다. 실행 중 생성되는 audio, transcript, raw result는 `evals/stt_accuracy/output/**`에 둔다.
+평가 입력 계약은 `evals/stt_accuracy/suites/**`와 `evals/stt_accuracy/output/suites/**/manifest.local.json`가 소유한다. 실행 중 생성되는 raw/recovered/result는 `evals/stt_accuracy/output/runs/**`에 둔다.
 
 top-level `fixtures/`의 KSS, HiKE, token-recovery suite는 legacy/reference surface다. 새 active baseline으로 사용하지 않는다.
 
@@ -177,7 +177,7 @@ transcript는 세 종류로 분리한다.
 이 문서가 소유하지 않는 일:
 
 - 실제 audio 수집.
-- 실제 expected/raw transcript 작성.
+- raw transcript 작성.
 - model option 실험.
 - token recovery 구현.
 - 기존 fixture migration.
@@ -192,5 +192,7 @@ transcript는 세 종류로 분리한다.
 - 실제 Codex 명령형 발화만 포함.
 - sample은 `evals/stt_accuracy/output/corpus/`에 저장.
 - suite manifest는 sample id만 참조.
+- audio는 local-only로 둔다.
+- expected transcript와 metadata는 공개 가능한 baseline source로 Git에 추적한다.
 - 민감 발화는 local-only 또는 익명화.
 - 기존 KSS/HiKE/token-recovery fixture는 active baseline으로 재사용하지 않음.
