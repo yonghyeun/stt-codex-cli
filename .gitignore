@@ -1,5 +1,10 @@
 output/*
 !output/.gitkeep
+evals/**/output/**
+!evals/**/output/
+!evals/**/output/README.md
+!evals/**/output/**/
+!evals/**/output/**/.gitkeep
 fixtures/generated/
 *.wav
 *.mp3

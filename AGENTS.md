@@ -21,8 +21,10 @@
 | `stt_runtime/**` | `stt_runtime/README.md` | OS, subprocess, PTY, file write adapter 경계 |
 | `stt_features/**` | `stt_features/README.md` | 사용자 use-case flow 조립 경계 |
 | `scripts/**` | `README.md` | STT 실행 스크립트 경계 |
+| `evals/**` | `evals/README.md` | 평가 트랙, suite, report 계약 |
+| `fixtures/**` | `fixtures/README.md` | legacy fixture와 reference suite 경계 |
 | `experiments/**` | `README.md` | 실험 기록 경계 |
-| `output/**` | `README.md` | 로컬 산출물 경계 |
+| `output/**` | `README.md` | wrapper 로컬 산출물 경계 |
 
 ## 작업 경계
 
