@@ -26,6 +26,13 @@
     },
     "recording_status": {
       "enum": ["recorded"]
+    },
+    "expected_text_policy": {
+      "enum": ["codex_final_input", "actual_spoken_phrase"]
+    },
+    "rerecord_reason": {
+      "type": "string",
+      "minLength": 1
     }
   }
 }

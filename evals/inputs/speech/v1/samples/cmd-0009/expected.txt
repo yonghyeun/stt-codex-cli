@@ -1,1 +1,1 @@
-evals/stt_accuracy/README.md 열어서 ownership rule 확인해줘
+이밸스 에스티티 어큐러시 리드미 열어서 오너십 룰 확인해줘

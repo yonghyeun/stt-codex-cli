@@ -1,1 +1,1 @@
-scripts/transcribe.sh 실행 경로와 옵션을 README에서 찾아줘
+스크립츠 트랜스크라이브 실행 경로와 옵션을 리드미에서 찾아줘
