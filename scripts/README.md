@@ -467,7 +467,8 @@ scripts/transcribe.sh fixtures/generated/kss-row-00000/audio.wav --model large-v
 - 무음 환각을 줄이기 위해 VAD filter는 기본 활성화한다.
 - 변환 결과는 stdout으로 출력한다.
 - `--output output/transcripts/example.txt`를 주면 텍스트 파일도 저장한다.
-- `--initial-prompt` 또는 `STT_INITIAL_PROMPT`로 faster-whisper initial prompt를 지정할 수 있다.
+- 기본 initial prompt는 한국어 음가 우선 전사 정책이다.
+- `--initial-prompt` 또는 `STT_INITIAL_PROMPT`로 faster-whisper initial prompt를 덮어쓸 수 있다.
 - fixture 비교는 기본적으로 공백과 문장부호를 제거한 normalized match를 사용한다.
 - suite 검증은 단어 추가, 누락, 치환을 실패로 본다.
 - KSS fixture는 `cc-by-nc-sa-4.0`이므로 비상업 실험용으로만 사용한다.
