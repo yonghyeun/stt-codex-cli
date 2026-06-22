@@ -337,6 +337,11 @@ class SttAccuracyHarnessTest(unittest.TestCase):
             REPO_ROOT
             / "evals"
             / "stt_accuracy"
+            / "reports"
+            / "2026-06-22-speech-v1-phonetic-contract.md",
+            REPO_ROOT
+            / "evals"
+            / "stt_accuracy"
             / "suites"
             / "codex-command-accuracy-v1"
             / "README.md",
