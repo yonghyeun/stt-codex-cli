@@ -23,7 +23,7 @@ Linux에서 Codex CLI 입력을 보조하기 위한 로컬 STT 실험 workspace.
 
 이 도구는 repo 전용 도구가 아니라 일반 terminal coding agent 입력 보조 도구로 확장 가능해야 한다. 초기 구현 대상은 Codex CLI다.
 
-녹음본과 transcript는 기본적으로 영구 저장하지 않는다. STT 처리에는 임시 WAV 파일을 사용할 수 있지만, 처리가 끝나면 삭제한다. 사용자가 명시적으로 저장 옵션을 켠 경우에만 `output/runs/` 아래에 audio, transcript, metadata를 남긴다.
+녹음본과 transcript는 기본적으로 영구 저장하지 않는다. STT 처리에는 임시 WAV 파일 또는 in-memory WAV buffer를 사용할 수 있다. 임시 WAV를 만들면 처리가 끝난 뒤 삭제한다. 사용자가 명시적으로 저장 옵션을 켠 경우에만 `output/runs/` 아래에 audio, transcript, metadata를 남긴다.
 
 ## Architecture
 
@@ -47,7 +47,7 @@ Runtime flow:
   -> scripts/stt_codex.py
   -> Codex CLI child PTY 시작
   -> 사용자가 Ctrl+T를 누르고 말함
-  -> parent wrapper가 임시 WAV 녹음
+  -> parent wrapper가 audio를 file 또는 buffer handoff로 녹음
   -> Ctrl+T 반복 입력이 끊기면 녹음 종료
   -> faster-whisper로 STT 변환
   -> raw transcript를 Codex 입력창에 삽입
@@ -64,7 +64,9 @@ Boundary:
 
 Storage:
 
-- 녹음은 STT 처리를 위해 임시 WAV 파일로 만든다.
+- 녹음은 STT 처리를 위해 임시 WAV 파일 또는 in-memory WAV buffer로 만든다.
+- 기본 subprocess backend와 저장/debug 옵션은 file handoff를 사용한다.
+- worker backend에서 `--audio-handoff auto`이고 `--save-run`/`--keep-audio`가 꺼져 있으면 buffer handoff를 사용한다.
 - 임시 WAV는 기본 삭제한다.
 - `--save-run`을 명시한 경우에만 `output/runs/YYYYMMDD-HHMMSS-mmm-stt-codex/` 아래에 audio, transcript, metadata를 보존한다.
 - `--keep-audio`는 임시 WAV 자체를 남기는 debug option이다.
@@ -75,8 +77,9 @@ Current core scripts:
 - `scripts/stt_codex.py`: 현재 메인 entrypoint. CLI option과 backward-compatible wrapper surface를 담당한다.
 - `scripts/transcribe.sh`: venv/CUDA library path를 준비하고 `transcribe.py`를 subprocess로 실행한다.
 - `scripts/transcribe.py`: faster-whisper STT 실행을 담당한다.
-- `scripts/transcribe_worker.sh`, `scripts/transcribe_worker.py`: wrapper session 안에서 faster-whisper model을 한 번 load하고 WAV path request를 반복 처리하는 persistent worker를 담당한다.
+- `scripts/transcribe_worker.sh`, `scripts/transcribe_worker.py`: wrapper session 안에서 faster-whisper model을 한 번 load하고 WAV path 또는 in-memory WAV buffer request를 반복 처리하는 persistent worker를 담당한다.
 - `scripts/run_fixture_suite.sh`, `scripts/run_fixture_suite.py`: fixture regression을 담당한다.
+- `scripts/measure_audio_handoff_latency.py`: persistent worker file handoff와 buffer handoff의 fixed smoke latency/accuracy 비교를 담당한다.
 - `scripts/record.sh`, `scripts/push_to_talk.py`, `scripts/stt_clipboard.sh`, `scripts/record_clipboard.sh`, `scripts/copy_text.sh`: 보조 실행 흐름이다.
 
 Current mini-layer modules:
@@ -196,6 +199,14 @@ scripts/stt_codex.py
 scripts/stt_codex.py --stt-model large-v3 --stt-device cuda --stt-compute-type float16
 ```
 
+persistent worker와 buffer handoff를 명시:
+
+```bash
+scripts/stt_codex.py --stt-backend worker --audio-handoff buffer
+```
+
+`--audio-handoff auto`는 worker backend에서 저장/debug audio option이 꺼진 경우에만 buffer를 사용한다. `--save-run` 또는 `--keep-audio`가 켜지면 file handoff로 돌아가 audio 보존 계약을 우선한다.
+
 실행 후 사용자는 `Ctrl+T`를 누르고 말한다. `Ctrl+T` 반복 입력이 끊기면 wrapper가 녹음을 종료하고 STT raw transcript를 Codex CLI 입력창에 삽입한다. Enter는 사용자가 직접 누른다.
 
 실제 발화 audio와 transcript를 남겨 비교해야 할 때만 저장 option을 켠다.
@@ -258,6 +269,7 @@ scripts/stt_codex.py --stt-model tiny --stt-device cpu --stt-compute-type int8 -
 - 한영 혼합 문장에서 `session`, `bug`, 파일명, option name 같은 Latin token이 한글 외래어 표기로 바뀔 수 있다.
 - wrapper 기본 흐름은 token recovery, personal vocabulary, workspace metadata 기반 복원을 수행하지 않는다.
 - STT 실행 중에는 wrapper event loop가 잠시 block될 수 있다.
+- Buffer handoff는 persistent worker request path의 file read/write 비용을 줄이기 위한 speed path다. `--save-run`과 `--keep-audio`는 file handoff를 사용한다.
 - `--save-run`은 실제 발화 audio와 transcript를 파일로 남긴다. 외부 공유 전 `output/` 확인이 필요하다.
 
 ## E2E Test Gate

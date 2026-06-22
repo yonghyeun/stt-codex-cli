@@ -60,6 +60,7 @@ ${HOME}/stt-codex-cli
 ```bash
 codex-stt
 codex-stt --stt-model large-v3 --stt-device cuda --stt-compute-type float16
+codex-stt --stt-backend worker --audio-handoff buffer
 ```
 
 repo가 기본 위치가 아닌 곳에 있으면 runtime override를 사용한다.
@@ -147,6 +148,37 @@ renderer 출력은 stdout으로만 쓴다. `--show-text` 출력에는 raw transc
 renderer는 기본적으로 `evals/stt_accuracy/metric_contract.json`을 읽어 summary metric,
 source metric, direction, failure type 설명을 출력한다. 다른 contract 검증이 필요할 때만
 `--metric-contract <path>`를 사용한다.
+
+## Audio Handoff Latency Harness
+
+`#32` buffer handoff는 persistent worker의 file handoff와 buffer handoff를 같은 fixed
+smoke input으로 비교한다.
+
+```bash
+STT_PYTHON_BIN=/path/to/.venv/bin/python \
+STT_SITE_PACKAGES=/path/to/.venv/lib/python3.12/site-packages \
+scripts/measure_audio_handoff_latency.py \
+  --run-id 20260623-buffer-handoff-large-v3-cuda-float16 \
+  --input-root /path/to/stt-codex-cli/evals/inputs/speech/v1 \
+  --model large-v3 \
+  --device cuda \
+  --compute-type float16 \
+  --language ko \
+  --report-output evals/stt_accuracy/reports/2026-06-23-buffer-handoff.md
+```
+
+Dry-run은 model load 없이 suite/input 연결과 비교 대상 mode만 검증한다.
+
+```bash
+scripts/measure_audio_handoff_latency.py \
+  --input-root /path/to/stt-codex-cli/evals/inputs/speech/v1 \
+  --dry-run
+```
+
+- `file`: persistent worker에 WAV path를 전달한다.
+- `buffer`: persistent worker에 base64 WAV bytes를 전달한다.
+- 실행 결과는 `evals/stt_accuracy/runs/<run_id>/` 아래 local-only artifact로 남긴다.
+- report는 `#29` fixed smoke latency baseline과 case score를 prior value로 표시한다.
 
 ## Speech Sample Recording
 
