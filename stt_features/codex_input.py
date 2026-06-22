@@ -19,11 +19,40 @@ from stt_runtime.recording import (
 )
 from stt_runtime.run_artifacts import save_run_artifacts
 from stt_runtime.terminal import copy_window_size
-from stt_runtime.transcription import transcribe_audio
+from stt_runtime.transcription import (
+    SubprocessTranscriptionClient,
+    TranscriptionClient,
+    TranscriptionConfig,
+    TranscriptionRequest,
+)
 
 
 READ_SIZE = 4096
 StatusFn = Callable[[str], None]
+
+
+def transcription_config_from_args(args: object) -> TranscriptionConfig:
+    return TranscriptionConfig(
+        model=args.stt_model,
+        language=args.stt_language,
+        device=args.stt_device,
+        compute_type=args.stt_compute_type,
+        beam_size=args.stt_beam_size,
+        initial_prompt=args.stt_initial_prompt,
+        vad_filter=not args.stt_no_vad_filter,
+    )
+
+
+def transcription_metadata(config: TranscriptionConfig) -> dict[str, object]:
+    return {
+        "model": config.model,
+        "language": config.language,
+        "device": config.device,
+        "compute_type": config.compute_type,
+        "beam_size": config.beam_size,
+        "vad_filter": config.vad_filter,
+        "initial_prompt": config.initial_prompt,
+    }
 
 
 def inject_transcript(status: StatusFn, child_fd: int, transcript: str) -> bool:
@@ -45,6 +74,8 @@ def finish_recording_and_inject(
     child_command: list[str],
     state: RecordingState,
     status: StatusFn,
+    transcription_client: TranscriptionClient,
+    transcription_config: TranscriptionConfig,
 ) -> None:
     audio_file, elapsed, started_at = stop_recording(state=state, status=status)
     transcript = ""
@@ -58,18 +89,10 @@ def finish_recording_and_inject(
             )
             outcome = "skipped_short_recording"
             return
-        transcript = transcribe_audio(
-            repo_root=repo_root,
-            audio_file=audio_file,
-            stt_model=args.stt_model,
-            stt_language=args.stt_language,
-            stt_device=args.stt_device,
-            stt_compute_type=args.stt_compute_type,
-            stt_beam_size=args.stt_beam_size,
-            stt_initial_prompt=args.stt_initial_prompt,
-            stt_no_vad_filter=args.stt_no_vad_filter,
-            status=status,
+        result = transcription_client.transcribe(
+            TranscriptionRequest(audio_file=audio_file)
         )
+        transcript = result.transcript
         injected = inject_transcript(status, child_fd, transcript)
         outcome = "injected" if injected else "empty_transcript"
     except RuntimeError as error:
@@ -89,15 +112,7 @@ def finish_recording_and_inject(
             injected=injected,
             outcome=outcome,
             error=error_message,
-            stt={
-                "model": args.stt_model,
-                "language": args.stt_language,
-                "device": args.stt_device,
-                "compute_type": args.stt_compute_type,
-                "beam_size": args.stt_beam_size,
-                "vad_filter": not args.stt_no_vad_filter,
-                "initial_prompt": args.stt_initial_prompt,
-            },
+            stt=transcription_metadata(transcription_config),
             child_command=child_command,
             child_cwd=args.cwd,
             status=status,
@@ -200,6 +215,8 @@ def maybe_finish_stt_recording(
     child_command: list[str],
     state: RecordingState,
     status: StatusFn,
+    transcription_client: TranscriptionClient,
+    transcription_config: TranscriptionConfig,
 ) -> None:
     if not state.active() or state.last_trigger_at is None:
         return
@@ -215,6 +232,8 @@ def maybe_finish_stt_recording(
                 child_command=child_command,
                 state=state,
                 status=status,
+                transcription_client=transcription_client,
+                transcription_config=transcription_config,
             )
         except RuntimeError as error:
             status(f"stt error: {error}")
@@ -228,6 +247,8 @@ def maybe_finish_stt_recording(
                 child_command=child_command,
                 state=state,
                 status=status,
+                transcription_client=transcription_client,
+                transcription_config=transcription_config,
             )
         except RuntimeError as error:
             status(f"stt error: {error}")
@@ -241,6 +262,7 @@ def passthrough(
     child_fd: int,
     child_command: list[str],
     status: StatusFn,
+    transcription_client: TranscriptionClient | None = None,
 ) -> int:
     selector = selectors.DefaultSelector()
     selector.register(child_fd, selectors.EVENT_READ, "child")
@@ -251,6 +273,18 @@ def passthrough(
         stdin_open = False
     exit_code: int | None = None
     recording_state = RecordingState()
+    transcription_config: TranscriptionConfig | None = None
+    active_transcription_client = transcription_client
+    if args.inject_mode == "stt" or active_transcription_client is not None:
+        transcription_config = transcription_config_from_args(args)
+    if active_transcription_client is None and args.inject_mode == "stt":
+        if transcription_config is None:
+            raise RuntimeError("STT transcription config is not configured")
+        active_transcription_client = SubprocessTranscriptionClient(
+            repo_root=repo_root,
+            config=transcription_config,
+            status=status,
+        )
 
     def handle_sigwinch(signum: int, frame: object) -> None:
         copy_window_size(child_fd)
@@ -262,6 +296,8 @@ def passthrough(
     try:
         while True:
             if args.inject_mode == "stt":
+                if active_transcription_client is None or transcription_config is None:
+                    raise RuntimeError("STT transcription client is not configured")
                 maybe_finish_stt_recording(
                     args=args,
                     repo_root=repo_root,
@@ -269,6 +305,8 @@ def passthrough(
                     child_command=child_command,
                     state=recording_state,
                     status=status,
+                    transcription_client=active_transcription_client,
+                    transcription_config=transcription_config,
                 )
 
             if exit_code is None:
@@ -321,40 +359,40 @@ def passthrough(
                         status=status,
                     )
     finally:
-        if recording_state.active():
-            audio_file, elapsed, started_at = stop_recording(
-                state=recording_state,
-                status=status,
-            )
-            save_run_artifacts(
-                repo_root=repo_root,
-                save_run=args.save_run,
-                keep_audio=args.keep_audio,
-                run_output_dir=args.run_output_dir,
-                audio_file=audio_file,
-                transcript="",
-                started_at=started_at,
-                elapsed=elapsed,
-                injected=False,
-                outcome="interrupted_recording",
-                error=None,
-                stt={
-                    "model": args.stt_model,
-                    "language": args.stt_language,
-                    "device": args.stt_device,
-                    "compute_type": args.stt_compute_type,
-                    "beam_size": args.stt_beam_size,
-                    "vad_filter": not args.stt_no_vad_filter,
-                    "initial_prompt": args.stt_initial_prompt,
-                },
-                child_command=child_command,
-                child_cwd=args.cwd,
-                status=status,
-            )
-            cleanup_audio(
-                keep_audio=args.keep_audio,
-                audio_file=audio_file,
-                status=status,
-            )
-        signal.signal(signal.SIGWINCH, previous_sigwinch)
-        selector.close()
+        try:
+            if recording_state.active():
+                if transcription_config is None:
+                    raise RuntimeError("STT transcription config is not configured")
+                audio_file, elapsed, started_at = stop_recording(
+                    state=recording_state,
+                    status=status,
+                )
+                save_run_artifacts(
+                    repo_root=repo_root,
+                    save_run=args.save_run,
+                    keep_audio=args.keep_audio,
+                    run_output_dir=args.run_output_dir,
+                    audio_file=audio_file,
+                    transcript="",
+                    started_at=started_at,
+                    elapsed=elapsed,
+                    injected=False,
+                    outcome="interrupted_recording",
+                    error=None,
+                    stt=transcription_metadata(transcription_config),
+                    child_command=child_command,
+                    child_cwd=args.cwd,
+                    status=status,
+                )
+                cleanup_audio(
+                    keep_audio=args.keep_audio,
+                    audio_file=audio_file,
+                    status=status,
+                )
+        finally:
+            try:
+                if active_transcription_client is not None:
+                    active_transcription_client.close()
+            finally:
+                signal.signal(signal.SIGWINCH, previous_sigwinch)
+                selector.close()
