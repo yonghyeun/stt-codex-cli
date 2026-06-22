@@ -7,12 +7,19 @@ import sys
 import time
 from pathlib import Path
 
+REPO_ROOT = Path(__file__).resolve().parents[1]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
 import ctranslate2
 from faster_whisper import WhisperModel
+
+from stt_core.transcription_prompt import DEFAULT_KOREAN_PHONETIC_INITIAL_PROMPT
 
 
 DEFAULT_MODEL = "large-v3"
 DEFAULT_LANGUAGE = "ko"
+DEFAULT_INITIAL_PROMPT = DEFAULT_KOREAN_PHONETIC_INITIAL_PROMPT
 
 
 def env_flag(name: str, default: bool) -> bool:
@@ -56,8 +63,8 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--initial-prompt",
-        default=os.environ.get("STT_INITIAL_PROMPT"),
-        help="Optional prompt text to guide transcription. Env: STT_INITIAL_PROMPT",
+        default=os.environ.get("STT_INITIAL_PROMPT", DEFAULT_INITIAL_PROMPT),
+        help="Prompt text to guide transcription. Default: Korean phonetic prompt. Env: STT_INITIAL_PROMPT",
     )
     parser.add_argument(
         "--model-dir",

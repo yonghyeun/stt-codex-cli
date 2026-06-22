@@ -21,6 +21,7 @@ from stt_core.command import (
 from stt_core.keyboard import KeySequenceError, parse_key_sequence as parse_core_key_sequence
 from stt_core.run_metadata import run_id_from_timestamp
 from stt_core.transcript import transcript_has_text
+from stt_core.transcription_prompt import DEFAULT_KOREAN_PHONETIC_INITIAL_PROMPT
 from stt_features.codex_input import (
     inject_transcript as inject_feature_transcript,
     passthrough,
@@ -43,6 +44,7 @@ DEFAULT_RELEASE_GAP = 0.75
 DEFAULT_MAX_DURATION = 60.0
 DEFAULT_MIN_DURATION = 0.15
 DEFAULT_RUN_OUTPUT_DIR = "output/runs"
+DEFAULT_STT_INITIAL_PROMPT = DEFAULT_KOREAN_PHONETIC_INITIAL_PROMPT
 PARENT_PREFIX = "[stt-parent]"
 
 
@@ -163,8 +165,8 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--stt-initial-prompt",
-        default=os.environ.get("STT_INITIAL_PROMPT"),
-        help="Optional STT initial prompt.",
+        default=os.environ.get("STT_INITIAL_PROMPT", DEFAULT_STT_INITIAL_PROMPT),
+        help="STT initial prompt. Default: Korean phonetic prompt. Env: STT_INITIAL_PROMPT",
     )
     parser.add_argument(
         "--stt-no-vad-filter",

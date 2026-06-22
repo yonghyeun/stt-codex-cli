@@ -8,6 +8,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from scripts import stt_codex
+from stt_core.transcription_prompt import DEFAULT_KOREAN_PHONETIC_INITIAL_PROMPT
 
 
 def make_args(**overrides: object) -> argparse.Namespace:
@@ -26,7 +27,7 @@ def make_args(**overrides: object) -> argparse.Namespace:
         "stt_compute_type": "auto",
         "stt_beam_size": 5,
         "stt_no_vad_filter": False,
-        "stt_initial_prompt": None,
+        "stt_initial_prompt": stt_codex.DEFAULT_STT_INITIAL_PROMPT,
         "cwd": None,
     }
     values.update(overrides)
@@ -76,6 +77,14 @@ class TranscriptPolicyTest(unittest.TestCase):
         self.assertFalse(stt_codex.transcript_has_text(".,!?"))
         self.assertTrue(stt_codex.transcript_has_text("안녕하세요"))
         self.assertTrue(stt_codex.transcript_has_text("bug 123"))
+
+
+class InitialPromptDefaultTest(unittest.TestCase):
+    def test_stt_codex_default_prompt_uses_korean_phonetic_policy(self) -> None:
+        self.assertEqual(
+            stt_codex.DEFAULT_STT_INITIAL_PROMPT,
+            DEFAULT_KOREAN_PHONETIC_INITIAL_PROMPT,
+        )
 
 
 class RunArtifactTest(unittest.TestCase):
@@ -132,6 +141,10 @@ class RunArtifactTest(unittest.TestCase):
             self.assertTrue(metadata["transcript_has_text"])
             self.assertEqual(metadata["audio_file"], "audio.wav")
             self.assertEqual(metadata["transcript_file"], "transcript.txt")
+            self.assertEqual(
+                metadata["stt"]["initial_prompt"],
+                stt_codex.DEFAULT_STT_INITIAL_PROMPT,
+            )
             self.assertEqual(metadata["child"]["command"], ["codex", "--no-alt-screen"])
 
 
