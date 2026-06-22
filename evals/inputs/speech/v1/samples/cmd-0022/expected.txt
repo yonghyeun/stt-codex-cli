@@ -1,1 +1,1 @@
-기존 fixtures 기반 결과는 참고만 하고 codex-command-accuracy-v1의 active baseline으로 쓰지 말아줘
+기존 픽스처스 기반 결과는 참고만 하고 코덱스 커맨드 어큐러시 브이원 액티브 베이스라인으로 쓰지 말아줘

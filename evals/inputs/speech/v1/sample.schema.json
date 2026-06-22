@@ -3,7 +3,13 @@
   "$id": "https://github.com/yonghyeun/stt-codex-cli/evals/inputs/speech/v1/sample.schema.json",
   "title": "Speech Input v1 Sample Metadata",
   "type": "object",
-  "required": ["sample_id", "prompt_id", "category", "recording_status"],
+  "required": [
+    "sample_id",
+    "prompt_id",
+    "category",
+    "recording_status",
+    "expected_text_policy"
+  ],
   "additionalProperties": false,
   "properties": {
     "sample_id": {
@@ -28,9 +34,17 @@
       "enum": ["recorded"]
     },
     "expected_text_policy": {
-      "enum": ["codex_final_input", "actual_spoken_phrase"]
+      "enum": [
+        "codex_final_input",
+        "actual_spoken_phrase",
+        "korean_phonetic_transcript"
+      ]
     },
     "rerecord_reason": {
+      "type": "string",
+      "minLength": 1
+    },
+    "contract_alignment_reason": {
       "type": "string",
       "minLength": 1
     }

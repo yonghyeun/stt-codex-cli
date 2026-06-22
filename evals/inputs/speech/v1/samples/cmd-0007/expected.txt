@@ -1,1 +1,1 @@
-Codex command accuracy suite 기준으로 baseline 준비해줘
+코덱스 커맨드 어큐러시 스위트 기준으로 베이스라인 준비해줘

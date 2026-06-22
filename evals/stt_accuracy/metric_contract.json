@@ -73,17 +73,20 @@
     "korean_command_mismatch": {
       "description": "한국어 명령의 normalized match 실패."
     },
+    "phonetic_transcript_mismatch": {
+      "description": "v1 한글 음가 expected transcript와 recovered transcript의 normalized match 실패."
+    },
     "latin_token_loss": {
-      "description": "expected의 Latin-script token 보존 실패."
+      "description": "expected의 Latin-script token 보존 실패. v1 한글 음가 suite에서는 통과 기준이 아니라 v2 literal 복원 참고 지표다."
     },
     "file_path_loss": {
-      "description": "파일명 또는 경로 token 보존 실패."
+      "description": "파일명 또는 경로 token 보존 실패. v1 한글 음가 suite에서는 통과 기준이 아니라 v2 literal 복원 참고 지표다."
     },
     "cli_option_loss": {
-      "description": "--option 형태 CLI option 보존 실패."
+      "description": "--option 형태 CLI option 보존 실패. v1 한글 음가 suite에서는 통과 기준이 아니라 v2 literal 복원 참고 지표다."
     },
     "code_identifier_loss": {
-      "description": "함수명, 모듈명, snake_case, dotted identifier 보존 실패."
+      "description": "함수명, 모듈명, snake_case, dotted identifier 보존 실패. v1 한글 음가 suite에서는 통과 기준이 아니라 v2 literal 복원 참고 지표다."
     },
     "hallucination": {
       "description": "expected에 없는 Latin-script token이 raw transcript에 추가됨."
@@ -105,6 +108,13 @@
         "text_similarity"
       ],
       "failure_type": "korean_command_mismatch"
+    },
+    "phonetic_transcript_match": {
+      "quality_priority": [
+        "normalized_char_error_rate",
+        "text_similarity"
+      ],
+      "failure_type": "phonetic_transcript_mismatch"
     },
     "latin_token_preservation": {
       "quality_priority": [

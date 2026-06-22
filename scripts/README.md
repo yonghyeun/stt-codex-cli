@@ -61,6 +61,7 @@ scripts/run_stt_accuracy_suite.py \
 - raw transcript는 `raw/<sample_id>.txt`에 쓴다.
 - baseline에서는 token recovery를 쓰지 않으며 `recovered/<sample_id>.txt`는 raw와 같은 텍스트를 쓴다.
 - `result.json`은 metric 결과, failure taxonomy summary, `expected_text`/`raw_text`/`recovered_text` 비교, 정량 품질 지표를 소유한다.
+- v1 suite의 pass 기준 metric은 `phonetic_transcript_match`와 `insertion_safe`다.
 - 정량 품질 지표는 `char_error_rate`, `normalized_char_error_rate`, `text_similarity`, `word_error_rate`, `critical_token_precision`, `critical_token_recall`, `critical_token_f1`, `case_score`를 포함한다.
 - metric 설명과 renderer routing은 `evals/stt_accuracy/metric_contract.json`이 소유한다.
 - Git-tracked report에는 raw transcript 전체를 붙이지 않는다.

@@ -1,1 +1,1 @@
-save_run_artifacts 함수의 metadata shape을 확인해줘
+세이브 런 아티팩츠 함수의 메타데이터 셰이프를 확인해줘

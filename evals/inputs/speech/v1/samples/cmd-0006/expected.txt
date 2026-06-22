@@ -1,1 +1,1 @@
-manifest local json schema validation 커맨드 만들어줘
+매니페스트 로컬 제이슨 스키마 밸리데이션 커맨드 만들어줘

@@ -326,6 +326,12 @@ def evaluate_case(
         if not passed:
             failure_types.append("korean_command_mismatch")
 
+    if "phonetic_transcript_match" in metrics:
+        passed = normalized_match
+        metric_results["phonetic_transcript_match"] = metric_result(passed)
+        if not passed:
+            failure_types.append("phonetic_transcript_mismatch")
+
     if "latin_token_preservation" in metrics:
         tokens = latin_tokens(expected)
         missing = missing_tokens(tokens, actual)
