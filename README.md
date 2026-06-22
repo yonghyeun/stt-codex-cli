@@ -164,6 +164,25 @@ Current exclusion:
 
 ## Current Usage
 
+PATH command 설치:
+
+```bash
+scripts/install_codex_stt_command.sh
+```
+
+설치 후 실행:
+
+```bash
+codex-stt
+```
+
+`codex-stt` launcher의 기본 repo root는 `${HOME}/stt-codex-cli`다.
+다른 위치에서 실행해야 하면 `CODEX_STT_ROOT`로 repo root를 지정한다.
+
+```bash
+CODEX_STT_ROOT=/path/to/stt-codex-cli codex-stt --help
+```
+
 기본 실행:
 
 ```bash

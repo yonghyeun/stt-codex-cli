@@ -25,6 +25,58 @@ CUDA 실행이 필요하면 추가 설치한다.
 
 `scripts/transcribe.sh`는 venv에 설치된 CUDA library path를 자동으로 `LD_LIBRARY_PATH`에 추가한다.
 
+## Codex STT Launcher Command
+
+`codex-stt`를 shell alias가 아니라 PATH에 놓는 launcher command로 설치한다.
+
+```bash
+scripts/install_codex_stt_command.sh --dry-run
+scripts/install_codex_stt_command.sh
+```
+
+기본 설치 위치:
+
+```text
+${HOME}/.local/bin/codex-stt
+```
+
+기본 repo root:
+
+```text
+${HOME}/stt-codex-cli
+```
+
+설치 후 실행:
+
+```bash
+codex-stt
+codex-stt --stt-model large-v3 --stt-device cuda --stt-compute-type float16
+```
+
+repo가 기본 위치가 아닌 곳에 있으면 runtime override를 사용한다.
+
+```bash
+CODEX_STT_ROOT=/path/to/stt-codex-cli codex-stt --help
+```
+
+다른 위치에 설치하려면 `--target`을 지정한다.
+
+```bash
+scripts/install_codex_stt_command.sh --target /tmp/codex-stt
+```
+
+이미 다른 내용의 target 파일이 있으면 실패한다. 덮어쓰려면 `--force`를 명시한다.
+
+```bash
+scripts/install_codex_stt_command.sh --force
+```
+
+삭제:
+
+```bash
+rm "${HOME}/.local/bin/codex-stt"
+```
+
 ## STT Accuracy Baseline Harness
 
 `codex-command-accuracy-v1` baseline 실행 전에는 dry-run으로 suite와 input 연결을
