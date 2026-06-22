@@ -207,6 +207,22 @@ scripts/stt_codex.py --stt-backend worker --audio-handoff buffer
 
 `--audio-handoff auto`는 worker backend에서 저장/debug audio option이 꺼진 경우에만 buffer를 사용한다. `--save-run` 또는 `--keep-audio`가 켜지면 file handoff로 돌아가 audio 보존 계약을 우선한다.
 
+PTT speed profile을 명시:
+
+```bash
+scripts/stt_codex.py --ptt-profile speed
+```
+
+기본 `accuracy` profile의 release gap은 `0.75s`다. `speed` profile의 release gap은 `0.35s`다. Trigger 반복 입력이 끊긴 뒤 stop 판정까지의 deterministic wait delta는 `0.75s -> 0.35s`, 즉 `-0.40s`다.
+
+직접 지정한 release gap은 profile보다 우선한다.
+
+```bash
+scripts/stt_codex.py --ptt-profile speed --release-gap 0.5
+STT_PTT_PROFILE=speed scripts/stt_codex.py
+STT_PTT_RELEASE_GAP=0.5 scripts/stt_codex.py
+```
+
 실행 후 사용자는 `Ctrl+T`를 누르고 말한다. `Ctrl+T` 반복 입력이 끊기면 wrapper가 녹음을 종료하고 STT raw transcript를 Codex CLI 입력창에 삽입한다. Enter는 사용자가 직접 누른다.
 
 실제 발화 audio와 transcript를 남겨 비교해야 할 때만 저장 option을 켠다.
@@ -266,6 +282,7 @@ scripts/stt_codex.py --stt-model tiny --stt-device cpu --stt-compute-type int8 -
 - 실제 마이크 입력 품질이 낮으면 STT 결과가 크게 나빠진다. 장비 교체 후 `--save-run`으로 audio와 transcript를 같이 확인한다.
 - `Ctrl+T` PTT는 terminal key repeat에 의존한다. tmux나 terminal 설정에 따라 control sequence가 예상과 다를 수 있다.
 - `--inject-key t`는 smoke test에 유용하지만 일반 typing과 충돌하므로 기본값으로 쓰지 않는다.
+- `--ptt-profile speed`는 release gap을 `0.35s`로 낮춰 stop 판정을 빠르게 한다. 말 끝, 긴 모음, terminal key repeat pause가 겹치면 truncation risk가 커질 수 있다.
 - 한영 혼합 문장에서 `session`, `bug`, 파일명, option name 같은 Latin token이 한글 외래어 표기로 바뀔 수 있다.
 - wrapper 기본 흐름은 token recovery, personal vocabulary, workspace metadata 기반 복원을 수행하지 않는다.
 - STT 실행 중에는 wrapper event loop가 잠시 block될 수 있다.

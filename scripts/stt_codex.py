@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import os
 import sys
+from collections.abc import Mapping
 from datetime import datetime
 from pathlib import Path
 
@@ -42,6 +43,12 @@ DEFAULT_FIXED_INJECT_KEY = "ctrl+t"
 DEFAULT_STT_INJECT_KEY = "ctrl+t"
 DEFAULT_INJECT_TEXT = "hello from stt wrapper"
 DEFAULT_RELEASE_GAP = 0.75
+DEFAULT_PTT_PROFILE = "accuracy"
+SPEED_RELEASE_GAP = 0.35
+PTT_PROFILE_RELEASE_GAPS = {
+    DEFAULT_PTT_PROFILE: DEFAULT_RELEASE_GAP,
+    "speed": SPEED_RELEASE_GAP,
+}
 DEFAULT_MAX_DURATION = 60.0
 DEFAULT_MIN_DURATION = 0.15
 DEFAULT_RUN_OUTPUT_DIR = "output/runs"
@@ -102,10 +109,24 @@ def parse_args() -> argparse.Namespace:
         help="Pass all stdin through without reserving an injection key.",
     )
     parser.add_argument(
+        "--ptt-profile",
+        choices=tuple(PTT_PROFILE_RELEASE_GAPS),
+        default=os.environ.get("STT_PTT_PROFILE", DEFAULT_PTT_PROFILE),
+        help=(
+            "Push-to-talk release-gap profile. "
+            f"accuracy={DEFAULT_RELEASE_GAP:g}s, speed={SPEED_RELEASE_GAP:g}s. "
+            f"Default: {DEFAULT_PTT_PROFILE}. Env: STT_PTT_PROFILE"
+        ),
+    )
+    parser.add_argument(
         "--release-gap",
         type=positive_float,
-        default=float(os.environ.get("STT_PTT_RELEASE_GAP", str(DEFAULT_RELEASE_GAP))),
-        help=f"Seconds without repeated trigger input before STT recording stops. Default: {DEFAULT_RELEASE_GAP:g}s",
+        default=None,
+        help=(
+            "Seconds without repeated trigger input before STT recording stops. "
+            "Overrides --ptt-profile and STT_PTT_PROFILE. "
+            "Env: STT_PTT_RELEASE_GAP"
+        ),
     )
     parser.add_argument(
         "--max-duration",
@@ -202,6 +223,19 @@ def parse_args() -> argparse.Namespace:
         args.cmd_args = args.cmd_args[1:]
     if not args.cmd:
         parser.error("--cmd must not be empty")
+    if args.ptt_profile not in PTT_PROFILE_RELEASE_GAPS:
+        parser.error(
+            "--ptt-profile must be one of: "
+            + ", ".join(sorted(PTT_PROFILE_RELEASE_GAPS))
+        )
+    try:
+        args.release_gap = resolve_release_gap(
+            explicit_release_gap=args.release_gap,
+            ptt_profile=args.ptt_profile,
+            env=os.environ,
+        )
+    except argparse.ArgumentTypeError as error:
+        parser.error(str(error))
     if args.inject_key is None:
         args.inject_key = (
             DEFAULT_STT_INJECT_KEY
@@ -235,6 +269,27 @@ def positive_int(value: str) -> int:
     if parsed <= 0:
         raise argparse.ArgumentTypeError(f"value must be positive: {value}")
     return parsed
+
+
+def release_gap_for_ptt_profile(profile: str) -> float:
+    try:
+        return PTT_PROFILE_RELEASE_GAPS[profile]
+    except KeyError as error:
+        raise argparse.ArgumentTypeError(f"invalid PTT profile: {profile}") from error
+
+
+def resolve_release_gap(
+    *,
+    explicit_release_gap: float | None,
+    ptt_profile: str,
+    env: Mapping[str, str],
+) -> float:
+    if explicit_release_gap is not None:
+        return explicit_release_gap
+    env_release_gap = env.get("STT_PTT_RELEASE_GAP")
+    if env_release_gap is not None:
+        return positive_float(env_release_gap)
+    return release_gap_for_ptt_profile(ptt_profile)
 
 
 def parse_key_sequence(value: str) -> bytes:
@@ -338,7 +393,7 @@ def parent_banner(args: argparse.Namespace, argv: list[str], cwd: str | None) ->
         else:
             parent_status(
                 args,
-                f"ptt key: {args.inject_key}; release gap {args.release_gap:g}s; Enter still manual",
+                f"ptt key: {args.inject_key}; profile {args.ptt_profile}; release gap {args.release_gap:g}s; Enter still manual",
             )
             parent_status(args, f"stt backend: {args.stt_backend}")
             parent_status(

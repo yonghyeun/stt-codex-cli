@@ -439,10 +439,23 @@ scripts/stt_codex.py --stt-model large-v3 --stt-device cuda --stt-compute-type f
 scripts/stt_codex.py --stt-model tiny --stt-device cpu --stt-compute-type int8 --cmd python3 -- -q
 ```
 
+PTT speed profile:
+
+```bash
+scripts/stt_codex.py --ptt-profile speed
+```
+
 - STT mode 기본 trigger는 `ctrl+t`다.
 - `ctrl+t`는 child PTY로 전달되지 않고 parent가 소비한다.
 - `--inject-key t`처럼 trigger를 바꿀 수 있다.
-- `--release-gap`은 trigger 반복 입력이 끊긴 뒤 녹음을 종료할 때까지 기다리는 시간이다.
+- `--ptt-profile`은 release gap profile이다. 기본값은 `accuracy`다.
+- `accuracy` profile release gap은 `0.75s`다.
+- `speed` profile release gap은 `0.35s`다.
+- `STT_PTT_PROFILE=speed`로 speed profile을 기본 선택할 수 있다.
+- `--release-gap`은 trigger 반복 입력이 끊긴 뒤 녹음을 종료할 때까지 기다리는 시간을 직접 지정한다.
+- 우선순위는 `--release-gap` / `STT_PTT_RELEASE_GAP` > `--ptt-profile` / `STT_PTT_PROFILE` > `accuracy` default다.
+- `speed` profile의 deterministic wait delta는 `0.75s -> 0.35s`, 즉 `-0.40s`다.
+- release gap을 낮추면 말 끝 truncation risk가 커질 수 있다.
 - `--min-duration`보다 짧은 녹음은 STT 없이 버린다.
 - `--max-duration`을 넘으면 자동으로 녹음을 종료한다.
 - 녹음 파일은 system temp directory에 임시 WAV로 만든다.
