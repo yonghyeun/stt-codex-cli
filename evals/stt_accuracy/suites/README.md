@@ -69,15 +69,17 @@ manifest는 audio, expected, raw transcript 파일 경로를 직접 소유하지
 
 ## Expected Transcript Rule
 
-expected transcript는 STT가 들은 결과가 아니다. 사용자가 원래 Codex에 넣고 싶었던 최종 입력문이다.
+expected transcript는 v1에서 기대하는 STT 결과다. `speech/v1`에서는 사용자가 말한 개발 literal을 한글 음가로 적는다.
 
 원칙:
 
 - expected transcript는 `evals/inputs/speech/v1/samples/<sample_id>/expected.txt`가 소유한다.
-- 파일명, 경로, CLI option, 코드 식별자는 실제 입력 형태로 쓴다.
+- 파일명, 경로, CLI option, 코드 식별자는 v1에서 한글 음가로 쓴다.
 - raw transcript 수정본을 expected로 덮어쓰지 않는다.
 - 애매한 발화는 core suite에 넣지 않는다.
 - 공개하기 어려운 발화는 local-only로 둔다.
+
+literal 보존과 command normalization은 v2 이후 suite가 별도 metric으로 다룬다.
 
 ## Active Suites
 

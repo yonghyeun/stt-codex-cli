@@ -28,7 +28,11 @@
       "enum": ["recorded"]
     },
     "expected_text_policy": {
-      "enum": ["codex_final_input", "actual_spoken_phrase"]
+      "enum": [
+        "codex_final_input",
+        "actual_spoken_phrase",
+        "korean_phonetic_transcript"
+      ]
     },
     "rerecord_reason": {
       "type": "string",

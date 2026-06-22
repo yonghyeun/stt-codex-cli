@@ -145,6 +145,7 @@ class SttAccuracyResultRendererTest(unittest.TestCase):
 
         for failure_type in (
             "korean_command_mismatch",
+            "phonetic_transcript_mismatch",
             "latin_token_loss",
             "file_path_loss",
             "cli_option_loss",

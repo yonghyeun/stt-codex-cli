@@ -55,6 +55,7 @@
             "items": {
               "enum": [
                 "korean_command_match",
+                "phonetic_transcript_match",
                 "latin_token_preservation",
                 "file_path_preservation",
                 "cli_option_preservation",

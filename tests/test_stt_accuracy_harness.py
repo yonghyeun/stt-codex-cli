@@ -178,6 +178,22 @@ class SttAccuracyHarnessTest(unittest.TestCase):
         self.assertIn("latin_token_loss", result["failure_types"])
         self.assertTrue(result["metrics"]["insertion_safe"]["passed"])
 
+    def test_phonetic_transcript_match_uses_normalized_text(self) -> None:
+        result = run_stt_accuracy_suite.evaluate_case(
+            case_id="code-switch-001",
+            sample_id="cmd-0001",
+            category="code_switch",
+            metrics=["phonetic_transcript_match", "insertion_safe"],
+            expected="브이원 기준 확인해줘",
+            actual="비원 기준 확인해줘",
+            raw_file="raw/cmd-0001.txt",
+            recovered_file="recovered/cmd-0001.txt",
+        )
+
+        self.assertFalse(result["metrics"]["phonetic_transcript_match"]["passed"])
+        self.assertIn("phonetic_transcript_mismatch", result["failure_types"])
+        self.assertTrue(result["metrics"]["insertion_safe"]["passed"])
+
     def test_case_result_includes_text_comparison_and_quantitative_quality(self) -> None:
         result = run_stt_accuracy_suite.evaluate_case(
             case_id="code-switch-001",
