@@ -3,6 +3,6 @@
   "prompt_id": "P11",
   "category": "file_path",
   "recording_status": "recorded",
-  "expected_text_policy": "actual_spoken_phrase",
-  "rerecord_reason": "File path literal expected text was rewritten to match the user's natural spoken phrase."
+  "expected_text_policy": "korean_phonetic_transcript",
+  "contract_alignment_reason": "speech/v1 expected text is aligned to the Korean phonetic transcript policy."
 }

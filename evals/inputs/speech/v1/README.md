@@ -65,6 +65,7 @@ evals/inputs/speech/v1/samples/<sample_id>/
 - `recording_status`
 - `expected_text_policy`
 - `rerecord_reason`
+- `contract_alignment_reason`
 
 포함하지 않음:
 
@@ -76,10 +77,12 @@ evals/inputs/speech/v1/samples/<sample_id>/
 - run id.
 - result summary.
 
-`expected_text_policy`는 `expected.txt`가 어떤 기준의 text인지 설명한다.
+`expected_text_policy`는 `expected.txt`가 어떤 기준의 text인지 설명한다. 모든 `speech/v1` sample은 이 값을 가진다.
 `speech/v1`의 기본 정책은 `korean_phonetic_transcript`다.
 
 이전 정책값인 `codex_final_input`과 `actual_spoken_phrase`는 과거 수집 맥락을 설명할 수는 있지만, 새 v1 sample의 통과 기준으로 쓰지 않는다.
+
+`contract_alignment_reason`은 기존 sample을 한글 음가 transcript 기준으로 정렬한 이유를 기록한다.
 
 metric과 case selection은 평가 트랙의 suite manifest가 소유한다. transcription status와 실행 결과는 평가 트랙의 `runs/<run_id>/`가 소유한다.
 

@@ -283,6 +283,45 @@ class SttAccuracyHarnessTest(unittest.TestCase):
         )
         self.assertEqual(result_json["quality_summary"]["average_critical_token_f1"], 0.75)
 
+    def test_active_suite_uses_phonetic_transcript_metric_for_v1(self) -> None:
+        manifest_path = (
+            REPO_ROOT
+            / "evals"
+            / "stt_accuracy"
+            / "suites"
+            / "codex-command-accuracy-v1"
+            / "manifest.json"
+        )
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+
+        preservation_metrics = {
+            "latin_token_preservation",
+            "file_path_preservation",
+            "cli_option_preservation",
+            "code_identifier_preservation",
+        }
+        for case in manifest["cases"]:
+            metrics = set(case["metrics"])
+            self.assertIn("phonetic_transcript_match", metrics)
+            self.assertIn("insertion_safe", metrics)
+            self.assertTrue(metrics.isdisjoint(preservation_metrics), case["case_id"])
+
+    def test_speech_v1_samples_use_korean_phonetic_expected_policy(self) -> None:
+        samples_root = REPO_ROOT / "evals" / "inputs" / "speech" / "v1" / "samples"
+        latin_pattern = re.compile(r"[A-Za-z]")
+
+        for metadata_path in sorted(samples_root.glob("cmd-*/metadata.json")):
+            sample_dir = metadata_path.parent
+            metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+            expected_text = (sample_dir / "expected.txt").read_text(encoding="utf-8")
+
+            self.assertEqual(
+                metadata["expected_text_policy"],
+                "korean_phonetic_transcript",
+                metadata["sample_id"],
+            )
+            self.assertNotRegex(expected_text, latin_pattern, metadata["sample_id"])
+
     def test_local_eval_contract_docs_do_not_depend_on_remote_workflow_terms(self) -> None:
         docs = [
             REPO_ROOT / "evals" / "README.md",

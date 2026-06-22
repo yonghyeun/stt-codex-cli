@@ -2,5 +2,7 @@
   "sample_id": "cmd-0024",
   "prompt_id": "P24",
   "category": "long_form",
-  "recording_status": "recorded"
+  "recording_status": "recorded",
+  "expected_text_policy": "korean_phonetic_transcript",
+  "contract_alignment_reason": "speech/v1 expected text is aligned to the Korean phonetic transcript policy."
 }
