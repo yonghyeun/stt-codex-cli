@@ -2,7 +2,7 @@
   "$schema": "./manifest.schema.json",
   "input_set": "speech/v1",
   "version": 1,
-  "description": "Speech input v1 sample inventory migrated from issue #12 corpus collection.",
+  "description": "Speech input v1 sample inventory for Codex command accuracy evaluation.",
   "sample_ids": [
     "cmd-0001",
     "cmd-0002",

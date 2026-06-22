@@ -19,10 +19,10 @@
 - raw suite output.
 - 개인 token memory.
 - 일회성 실험 메모.
-- 다음 작업 queue.
-- remote handoff projection.
+- 작업 queue.
+- 외부 전달 상태.
 
-local artifact는 각 eval track의 `runs/` 또는 `memory/*.local.json`에 둔다. 다음 작업 queue와 handoff projection은 GitHub issue graph가 소유한다.
+local artifact는 각 eval track의 `runs/` 또는 `memory/*.local.json`에 둔다. `evals/` 아래 계약과 report는 local file state만으로 해석 가능해야 하며, 작업 순서나 외부 진행 상태에 의존하지 않는다.
 
 ## Inputs
 

@@ -25,6 +25,67 @@ CUDA 실행이 필요하면 추가 설치한다.
 
 `scripts/transcribe.sh`는 venv에 설치된 CUDA library path를 자동으로 `LD_LIBRARY_PATH`에 추가한다.
 
+## STT Accuracy Baseline Harness
+
+`codex-command-accuracy-v1` baseline 실행 전에는 dry-run으로 suite와 input 연결을
+검증한다.
+
+```bash
+scripts/run_stt_accuracy_suite.py \
+  --suite codex-command-accuracy-v1 \
+  --input-root evals/inputs/speech/v1 \
+  --run-id 20260621-large-v3-cuda-float16-baseline \
+  --model large-v3 \
+  --device cuda \
+  --compute-type float16 \
+  --language ko \
+  --dry-run
+```
+
+실제 baseline 실행은 `--dry-run`만 제거한다.
+
+```bash
+scripts/run_stt_accuracy_suite.py \
+  --suite codex-command-accuracy-v1 \
+  --input-root evals/inputs/speech/v1 \
+  --run-id 20260621-large-v3-cuda-float16-baseline \
+  --model large-v3 \
+  --device cuda \
+  --compute-type float16 \
+  --language ko
+```
+
+- dry-run은 모델을 load하지 않는다.
+- dry-run은 `audio.wav`, `expected.txt`, `metadata.json`, suite case mapping, run path 계획을 확인한다.
+- 실행 결과는 `evals/stt_accuracy/runs/<run_id>/` 아래에 local-only로 남긴다.
+- raw transcript는 `raw/<sample_id>.txt`에 쓴다.
+- baseline에서는 token recovery를 쓰지 않으며 `recovered/<sample_id>.txt`는 raw와 같은 텍스트를 쓴다.
+- `result.json`은 metric 결과, failure taxonomy summary, `expected_text`/`raw_text`/`recovered_text` 비교, 정량 품질 지표를 소유한다.
+- 정량 품질 지표는 `char_error_rate`, `normalized_char_error_rate`, `text_similarity`, `word_error_rate`, `critical_token_precision`, `critical_token_recall`, `critical_token_f1`, `case_score`를 포함한다.
+- metric 설명과 renderer routing은 `evals/stt_accuracy/metric_contract.json`이 소유한다.
+- Git-tracked report에는 raw transcript 전체를 붙이지 않는다.
+
+`result.json`을 사람이 읽는 Markdown으로 확인한다.
+
+```bash
+scripts/render_stt_accuracy_result.py \
+  evals/stt_accuracy/runs/20260621-large-v3-cuda-float16-baseline/result.json
+```
+
+case별 full text 비교가 필요하면 local inspection 용도로만 `--show-text`를 사용한다.
+
+```bash
+scripts/render_stt_accuracy_result.py \
+  evals/stt_accuracy/runs/20260621-large-v3-cuda-float16-baseline/result.json \
+  --show-text
+```
+
+renderer 출력은 stdout으로만 쓴다. `--show-text` 출력에는 raw transcript 본문이 포함되므로 Git-tracked report에 그대로 붙이지 않는다.
+
+renderer는 기본적으로 `evals/stt_accuracy/metric_contract.json`을 읽어 summary metric,
+source metric, direction, failure type 설명을 출력한다. 다른 contract 검증이 필요할 때만
+`--metric-contract <path>`를 사용한다.
+
 ## Prototype 8: Manual Token Recovery
 
 수동 memory에 등록된 표현만 복원한다.

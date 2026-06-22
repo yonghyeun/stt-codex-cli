@@ -2,22 +2,18 @@
 
 ## Context
 
-이 문서는 `#9` STT 정확도 개선 트랙의 Phase 1 수집 요약이다.
+이 문서는 STT accuracy evaluation용 speech input collection 요약이다.
 
 실제 audio는 local-only다. expected transcript, metadata, input manifest, suite manifest는 공개 가능한 baseline source로 Git에 추적한다.
-
-`#13`에서 수집된 speech sample은 shared input 위치로 migration됐다.
 
 ## Collection Summary
 
 - Input set: `speech/v1`
 - Suite: `codex-command-accuracy-v1`
-- Source issue: `#12`
-- Migration issue: `#13`
 - Sample count: 24
 - Audio files: 24
 - Manifest cases: 24
-- Raw STT output: not generated in this phase
+- Raw STT output: not generated in this collection run
 - Run artifact owner for raw output: `evals/stt_accuracy/runs/<run_id>/`
 - Ignored input files: `audio.wav` only
 
@@ -110,9 +106,9 @@ Git 추적 대상:
 - `evals/inputs/speech/v1/manifest.json`
 - `evals/stt_accuracy/suites/**/manifest.json`
 
-## Phase 2 Input
+## Baseline Input
 
-Phase 2는 `speech/v1` input set과 `codex-command-accuracy-v1` suite manifest를 입력으로 사용한다.
+Baseline은 `speech/v1` input set과 `codex-command-accuracy-v1` suite manifest를 입력으로 사용한다.
 
 Baseline raw STT output은 sample folder가 아니라 실행별 run folder에 저장한다.
 
@@ -132,4 +128,4 @@ evals/stt_accuracy/runs/<run_id>/
 
 - 기존 KSS, HiKE, token-recovery fixture는 이 corpus의 active baseline을 대체하지 않는다.
 - `cmd-0005`는 가장 짧은 sample이지만 WAV 파일은 정상이다.
-- `#13`에서 shared input ownership과 run artifact contract를 재정렬했다.
+- shared input ownership과 run artifact contract는 repo 문서와 manifest가 소유한다.
