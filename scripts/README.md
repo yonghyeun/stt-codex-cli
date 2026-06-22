@@ -25,6 +25,15 @@ CUDA 실행이 필요하면 추가 설치한다.
 
 `scripts/transcribe.sh`는 venv에 설치된 CUDA library path를 자동으로 `LD_LIBRARY_PATH`에 추가한다.
 
+분리된 worktree에서 이미 준비된 venv를 재사용해야 하면 환경변수로 Python과
+site-packages 위치를 지정할 수 있다. 기본값은 repo root의 `.venv`다.
+
+```bash
+STT_PYTHON_BIN=/path/to/.venv/bin/python \
+STT_SITE_PACKAGES=/path/to/.venv/lib/python3.12/site-packages \
+scripts/transcribe.sh audio.wav --model large-v3 --device cuda --compute-type float16
+```
+
 ## Codex STT Launcher Command
 
 `codex-stt`를 shell alias가 아니라 PATH에 놓는 launcher command로 설치한다.
