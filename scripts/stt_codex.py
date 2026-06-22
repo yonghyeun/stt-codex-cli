@@ -44,6 +44,7 @@ DEFAULT_RELEASE_GAP = 0.75
 DEFAULT_MAX_DURATION = 60.0
 DEFAULT_MIN_DURATION = 0.15
 DEFAULT_RUN_OUTPUT_DIR = "output/runs"
+DEFAULT_STT_BACKEND = "subprocess"
 DEFAULT_STT_INITIAL_PROMPT = DEFAULT_KOREAN_PHONETIC_INITIAL_PROMPT
 PARENT_PREFIX = "[stt-parent]"
 
@@ -140,6 +141,12 @@ def parse_args() -> argparse.Namespace:
         "--stt-model",
         default=os.environ.get("STT_MODEL", "large-v3"),
         help="Whisper model for STT mode. Default: large-v3",
+    )
+    parser.add_argument(
+        "--stt-backend",
+        choices=("subprocess", "worker"),
+        default=os.environ.get("STT_BACKEND", DEFAULT_STT_BACKEND),
+        help=f"STT execution backend. Default: {DEFAULT_STT_BACKEND}",
     )
     parser.add_argument(
         "--stt-language",
@@ -321,6 +328,7 @@ def parent_banner(args: argparse.Namespace, argv: list[str], cwd: str | None) ->
                 args,
                 f"ptt key: {args.inject_key}; release gap {args.release_gap:g}s; Enter still manual",
             )
+            parent_status(args, f"stt backend: {args.stt_backend}")
             if args.save_run:
                 parent_status(args, f"run artifacts: {resolve_run_output_dir(args)}")
     parent_status(args, "child output follows")

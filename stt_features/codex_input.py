@@ -20,6 +20,7 @@ from stt_runtime.recording import (
 from stt_runtime.run_artifacts import save_run_artifacts
 from stt_runtime.terminal import copy_window_size
 from stt_runtime.transcription import (
+    PersistentWorkerTranscriptionClient,
     SubprocessTranscriptionClient,
     TranscriptionClient,
     TranscriptionConfig,
@@ -53,6 +54,29 @@ def transcription_metadata(config: TranscriptionConfig) -> dict[str, object]:
         "vad_filter": config.vad_filter,
         "initial_prompt": config.initial_prompt,
     }
+
+
+def create_transcription_client(
+    *,
+    args: object,
+    repo_root: Path,
+    config: TranscriptionConfig,
+    status: StatusFn,
+) -> TranscriptionClient:
+    backend = getattr(args, "stt_backend", "subprocess")
+    if backend == "subprocess":
+        return SubprocessTranscriptionClient(
+            repo_root=repo_root,
+            config=config,
+            status=status,
+        )
+    if backend == "worker":
+        return PersistentWorkerTranscriptionClient(
+            repo_root=repo_root,
+            config=config,
+            status=status,
+        )
+    raise RuntimeError(f"unsupported STT backend: {backend}")
 
 
 def inject_transcript(status: StatusFn, child_fd: int, transcript: str) -> bool:
@@ -280,7 +304,8 @@ def passthrough(
     if active_transcription_client is None and args.inject_mode == "stt":
         if transcription_config is None:
             raise RuntimeError("STT transcription config is not configured")
-        active_transcription_client = SubprocessTranscriptionClient(
+        active_transcription_client = create_transcription_client(
+            args=args,
             repo_root=repo_root,
             config=transcription_config,
             status=status,
