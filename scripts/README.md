@@ -180,6 +180,42 @@ scripts/measure_audio_handoff_latency.py \
 - 실행 결과는 `evals/stt_accuracy/runs/<run_id>/` 아래 local-only artifact로 남긴다.
 - report는 `#29` fixed smoke latency baseline과 case score를 prior value로 표시한다.
 
+## Beam/VAD Tradeoff Harness
+
+`#35` beam/VAD tradeoff는 기존 file-based latency baseline primitive로
+`beam_size=5/1`과 VAD on/off matrix를 같은 fixed smoke input에서 비교한다.
+
+```bash
+STT_PYTHON_BIN=/path/to/.venv/bin/python \
+STT_SITE_PACKAGES=/path/to/.venv/lib/python3.12/site-packages \
+scripts/evaluate_beam_vad_tradeoff.py \
+  --run-id-prefix 20260623-beam-vad-fixed-smoke \
+  --input-root /path/to/stt-codex-cli/evals/inputs/speech/v1 \
+  --model large-v3 \
+  --device cuda \
+  --compute-type float16 \
+  --language ko \
+  --report-output evals/stt_accuracy/reports/2026-06-23-beam-vad-tradeoff.md
+```
+
+Dry-run은 model load 없이 suite/input 연결, fixed smoke sample, matrix 조합을
+검증한다.
+
+```bash
+scripts/evaluate_beam_vad_tradeoff.py \
+  --input-root /path/to/stt-codex-cli/evals/inputs/speech/v1 \
+  --dry-run
+```
+
+- 기본 비교 조합은 `beam5-vad-on`, `beam1-vad-on`, `beam5-vad-off`,
+  `beam1-vad-off`다.
+- same-run default combo는 `beam5-vad-on`이다.
+- report는 `#29` current-input fixed smoke case score와 subprocess 평균 latency를
+  prior value로 표시한다.
+- 실행 결과는 `evals/stt_accuracy/runs/<run_id_prefix>-<combo>/` 아래 local-only
+  artifact로 남긴다.
+- Git-tracked report에는 raw transcript 전체를 붙이지 않는다.
+
 ## Speech Sample Recording
 
 sample id 목록에서 아직 `audio.wav`가 없는 다음 sample 하나를 선택해 녹음한다.
