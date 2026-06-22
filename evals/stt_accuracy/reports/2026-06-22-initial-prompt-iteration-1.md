@@ -154,6 +154,35 @@ scripts/render_stt_accuracy_result.py \
   --max-text-chars 40
 ```
 
+## Run Config Matrix
+
+| run_id | suite | input_set | model | device | compute_type | language | beam_size | initial_prompt | token_recovery |
+| --- | --- | --- | --- | --- | --- | --- | ---: | --- | --- |
+| `20260622-large-v3-cuda-float16-baseline` | `codex-command-accuracy-v1` | `speech/v1` | `large-v3` | `cuda` | `float16` | `ko` | 5 | 없음 | `none` |
+| `20260622-initial-prompt-literal-classes` | `codex-command-accuracy-v1` | `speech/v1` | `large-v3` | `cuda` | `float16` | `ko` | 5 | candidate 1 | `none` |
+| `20260622-initial-prompt-repo-glossary` | `codex-command-accuracy-v1` | `speech/v1` | `large-v3` | `cuda` | `float16` | `ko` | 5 | candidate 2 | `none` |
+| `20260622-initial-prompt-suite-literals` | `codex-command-accuracy-v1` | `speech/v1` | `large-v3` | `cuda` | `float16` | `ko` | 5 | candidate 3 | `none` |
+
+## Artifact Verification
+
+생성 확인:
+
+- `evals/stt_accuracy/runs/20260622-initial-prompt-literal-classes/result.json`
+- `evals/stt_accuracy/runs/20260622-initial-prompt-repo-glossary/result.json`
+- `evals/stt_accuracy/runs/20260622-initial-prompt-suite-literals/result.json`
+
+Renderer 확인:
+
+- `scripts/render_stt_accuracy_result.py evals/stt_accuracy/runs/20260622-initial-prompt-literal-classes/result.json --max-text-chars 40`
+- `scripts/render_stt_accuracy_result.py evals/stt_accuracy/runs/20260622-initial-prompt-repo-glossary/result.json --max-text-chars 40`
+- `scripts/render_stt_accuracy_result.py evals/stt_accuracy/runs/20260622-initial-prompt-suite-literals/result.json --max-text-chars 40`
+
+Git ignore 확인:
+
+- `git check-ignore -v evals/stt_accuracy/runs/20260622-initial-prompt-literal-classes/result.json`
+- `git check-ignore -v evals/stt_accuracy/runs/20260622-initial-prompt-repo-glossary/result.json`
+- `git check-ignore -v evals/stt_accuracy/runs/20260622-initial-prompt-suite-literals/result.json`
+
 ## Result Summary
 
 | run | failed | case_score | text_similarity | nCER | critical_token_f1 | latin_loss | hallucination | file_path_loss | cli_option_loss | code_identifier_loss | korean failed |
