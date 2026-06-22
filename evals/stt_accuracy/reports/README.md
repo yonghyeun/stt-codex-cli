@@ -29,10 +29,12 @@ Baseline report는 다음 항목을 남긴다.
 - 전체 case 수와 실패 case 수.
 - category별 요약.
 - failure taxonomy별 요약.
+- quality summary.
 - 대표 mismatch 관찰. 단, raw transcript 전체 덤프는 제외.
 - 후속 실험 판단.
 
 baseline report는 `evals/stt_accuracy/runs/<run_id>/result.json`을 요약한다.
+`result.json`의 case별 `text_comparison`과 `quality`는 local inspection source다.
 run artifact 자체는 Git에 추적하지 않는다.
 
 ## Non-Ownership

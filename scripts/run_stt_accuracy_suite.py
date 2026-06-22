@@ -10,7 +10,7 @@ import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Sequence
 
 
 DEFAULT_SUITE = Path("evals/stt_accuracy/suites/codex-command-accuracy-v1/manifest.json")
@@ -150,6 +150,146 @@ def missing_tokens(expected_tokens: list[str], actual: str) -> list[str]:
     return missing
 
 
+def edit_distance(expected: Sequence[Any], actual: Sequence[Any]) -> int:
+    previous = list(range(len(actual) + 1))
+    for expected_index, expected_item in enumerate(expected, start=1):
+        current = [expected_index]
+        for actual_index, actual_item in enumerate(actual, start=1):
+            insertion = current[actual_index - 1] + 1
+            deletion = previous[actual_index] + 1
+            substitution = previous[actual_index - 1] + (
+                0 if expected_item == actual_item else 1
+            )
+            current.append(min(insertion, deletion, substitution))
+        previous = current
+    return previous[-1]
+
+
+def error_rate(distance: int, expected_length: int, actual_length: int) -> float:
+    if expected_length == 0:
+        return 0.0 if actual_length == 0 else 1.0
+    return round(distance / expected_length, 4)
+
+
+def similarity(distance: int, expected_length: int, actual_length: int) -> float:
+    denominator = max(expected_length, actual_length)
+    if denominator == 0:
+        return 1.0
+    return round(1.0 - (distance / denominator), 4)
+
+
+def ratio_or_none(numerator: int, denominator: int) -> float | None:
+    if denominator == 0:
+        return None
+    return round(numerator / denominator, 4)
+
+
+def f1_score(precision: float | None, recall: float | None) -> float | None:
+    if precision is None and recall is None:
+        return None
+    if not precision or not recall:
+        return 0.0
+    return round(2 * precision * recall / (precision + recall), 4)
+
+
+def average_or_none(values: list[float | None]) -> float | None:
+    numeric_values = [value for value in values if value is not None]
+    if not numeric_values:
+        return None
+    return round(sum(numeric_values) / len(numeric_values), 4)
+
+
+def build_critical_token_quality(expected: str, actual: str) -> dict[str, Any]:
+    expected_tokens = latin_tokens(expected)
+    actual_tokens = latin_tokens(actual)
+    normalized_actual = normalize(actual)
+    expected_terms = set(normalize(token) for token in expected_tokens)
+    preserved = [
+        token for token in expected_tokens if normalize(token) in normalized_actual
+    ]
+    missing = [
+        token for token in expected_tokens if normalize(token) not in normalized_actual
+    ]
+    matched_actual = [
+        token for token in actual_tokens if normalize(token) in expected_terms
+    ]
+    unexpected = [
+        token for token in actual_tokens if normalize(token) not in expected_terms
+    ]
+    precision = ratio_or_none(len(matched_actual), len(actual_tokens))
+    recall = ratio_or_none(len(preserved), len(expected_tokens))
+
+    if expected_tokens and not actual_tokens:
+        precision = 0.0
+    if actual_tokens and not expected_tokens:
+        recall = 0.0
+
+    return {
+        "precision": precision,
+        "recall": recall,
+        "f1": f1_score(precision, recall),
+        "tokens": {
+            "expected": expected_tokens,
+            "preserved": preserved,
+            "missing": missing,
+            "unexpected": unexpected,
+        },
+    }
+
+
+def build_quality(expected: str, actual: str) -> dict[str, Any]:
+    normalized_expected = normalize(expected)
+    normalized_actual = normalize(actual)
+    distance = edit_distance(expected, actual)
+    normalized_distance = edit_distance(normalized_expected, normalized_actual)
+    word_distance = edit_distance(expected.split(), actual.split())
+    critical_token_quality = build_critical_token_quality(expected, actual)
+    token_f1 = critical_token_quality["f1"]
+    text_similarity = similarity(
+        normalized_distance,
+        len(normalized_expected),
+        len(normalized_actual),
+    )
+    insertion_safe_score = (
+        1.0 if transcript_has_text(actual) and not is_punctuation_only(actual) else 0.0
+    )
+    hallucination_penalty = min(
+        0.2,
+        len(critical_token_quality["tokens"]["unexpected"]) * 0.05,
+    )
+    if token_f1 is None:
+        case_score = (0.8 * text_similarity) + (0.2 * insertion_safe_score)
+    else:
+        case_score = (
+            (0.4 * text_similarity)
+            + (0.4 * token_f1)
+            + (0.2 * insertion_safe_score)
+            - hallucination_penalty
+        )
+
+    return {
+        "edit_distance": distance,
+        "char_error_rate": error_rate(distance, len(expected), len(actual)),
+        "normalized_edit_distance": normalized_distance,
+        "normalized_char_error_rate": error_rate(
+            normalized_distance,
+            len(normalized_expected),
+            len(normalized_actual),
+        ),
+        "text_similarity": text_similarity,
+        "word_error_rate": error_rate(
+            word_distance,
+            len(expected.split()),
+            len(actual.split()),
+        ),
+        "critical_token_precision": critical_token_quality["precision"],
+        "critical_token_recall": critical_token_quality["recall"],
+        "critical_token_f1": token_f1,
+        "case_score": round(max(0.0, min(1.0, case_score)), 4),
+        "critical_tokens": critical_token_quality["tokens"],
+    }
+
+
 def metric_result(passed: bool, **details: Any) -> dict[str, Any]:
     return {"passed": passed, **details}
 
@@ -162,9 +302,11 @@ def evaluate_case(
     metrics: list[str],
     expected: str,
     actual: str,
+    recovered: str | None = None,
     raw_file: str,
     recovered_file: str,
 ) -> dict[str, Any]:
+    recovered_text = actual if recovered is None else recovered
     exact_match = expected == actual
     normalized_match = normalize(expected) == normalize(actual)
     metric_results: dict[str, Any] = {
@@ -257,6 +399,15 @@ def evaluate_case(
         "case_id": case_id,
         "sample_id": sample_id,
         "category": category,
+        "text_comparison": {
+            "expected_text": expected,
+            "raw_text": actual,
+            "recovered_text": recovered_text,
+            "normalized_expected": normalize(expected),
+            "normalized_raw": normalize(actual),
+            "normalized_recovered": normalize(recovered_text),
+        },
+        "quality": build_quality(expected, recovered_text),
         "metrics": metric_results,
         "failure_types": unique_in_order(failure_types),
         "raw_file": raw_file,
@@ -465,6 +616,23 @@ def build_result_json(
         "failed": sum(1 for result in case_results if result["failure_types"]),
         "category_summary": category_summary,
         "failure_summary": failure_summary,
+        "quality_summary": {
+            "average_case_score": average_or_none(
+                [result["quality"]["case_score"] for result in case_results]
+            ),
+            "average_text_similarity": average_or_none(
+                [result["quality"]["text_similarity"] for result in case_results]
+            ),
+            "average_normalized_char_error_rate": average_or_none(
+                [
+                    result["quality"]["normalized_char_error_rate"]
+                    for result in case_results
+                ]
+            ),
+            "average_critical_token_f1": average_or_none(
+                [result["quality"]["critical_token_f1"] for result in case_results]
+            ),
+        },
         "cases": case_results,
     }
 

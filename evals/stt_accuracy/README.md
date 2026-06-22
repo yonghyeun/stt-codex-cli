@@ -144,7 +144,7 @@ evals/stt_accuracy/runs/<run_id>/
 
 - `raw/`: STT 모델 출력 원문.
 - `recovered/`: token recovery나 후처리 적용 결과.
-- `result.json`: metric별 결과 summary.
+- `result.json`: metric별 결과 summary, case별 transcript 비교, 정량 품질 지표.
 - `metadata.json`: model, prompt, recovery policy, suite id, input set, 실행 시각 같은 run metadata.
 
 run artifact는 local-only다. 같은 speech input을 여러 model, prompt, recovery 정책으로 반복 실행해도 이전 결과를 덮어쓰지 않는다.
@@ -161,7 +161,35 @@ Baseline run의 `result.json` 최소 field:
 - `failed`
 - `category_summary`
 - `failure_summary`
+- `quality_summary`
 - `cases`
+
+`cases[]`의 각 항목은 inspection을 위해 다음 field를 가진다.
+
+- `text_comparison.expected_text`: 사용자가 의도한 최종 입력문.
+- `text_comparison.raw_text`: STT 모델 출력 원문.
+- `text_comparison.recovered_text`: 후처리 이후 텍스트. baseline에서는 raw와 같다.
+- `text_comparison.normalized_expected`
+- `text_comparison.normalized_raw`
+- `text_comparison.normalized_recovered`
+- `quality.edit_distance`
+- `quality.char_error_rate`
+- `quality.normalized_edit_distance`
+- `quality.normalized_char_error_rate`
+- `quality.text_similarity`
+- `quality.word_error_rate`
+- `quality.critical_token_precision`
+- `quality.critical_token_recall`
+- `quality.critical_token_f1`
+- `quality.case_score`
+- `quality.critical_tokens`
+
+`quality_summary`는 case별 `quality` 값을 suite 단위로 평균낸다.
+
+- `average_case_score`
+- `average_text_similarity`
+- `average_normalized_char_error_rate`
+- `average_critical_token_f1`
 
 Baseline run의 `metadata.json` 최소 field:
 
@@ -177,6 +205,24 @@ Baseline run의 `metadata.json` 최소 field:
 Baseline은 token recovery를 적용하지 않는다. `recovered/<sample_id>.txt`는 같은 run
 schema를 유지하기 위한 후처리 산출물 위치이며, baseline에서는 raw와 동일한 텍스트를
 쓴다. baseline report는 raw transcript 전체를 Git-tracked report에 복사하지 않는다.
+
+## Quantitative Quality Metrics
+
+pass/fail은 유지한다. 단, `result.json`은 실패 정도를 판단할 수 있도록 정량 지표를
+함께 기록한다.
+
+- `char_error_rate`: 원문 기준 character edit distance / expected character count.
+- `normalized_char_error_rate`: 공백과 문장부호를 제거한 normalized text 기준 CER.
+- `text_similarity`: normalized edit distance 기반 `0.0`에서 `1.0` 사이 유사도.
+- `word_error_rate`: 공백 기준 word edit distance / expected word count. 한국어에서는 보조 지표다.
+- `critical_token_precision`: transcript의 Latin-script token 중 expected에 있던 비율.
+- `critical_token_recall`: expected의 Latin-script token 중 transcript에 보존된 비율.
+- `critical_token_f1`: critical token precision과 recall의 F1.
+- `case_score`: `text_similarity`, `critical_token_f1`, insertion-safe 여부, hallucination penalty를 조합한 `0.0`에서 `1.0` 사이 점수.
+
+한국어 명령은 `normalized_char_error_rate`와 `text_similarity`를 우선 본다. 파일 경로,
+CLI option, 코드 식별자, 한영 혼합 발화는 `critical_token_recall`과
+`critical_token_f1`을 우선 본다.
 
 ## Failure Taxonomy
 

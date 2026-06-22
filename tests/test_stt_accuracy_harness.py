@@ -178,6 +178,95 @@ class SttAccuracyHarnessTest(unittest.TestCase):
         self.assertIn("latin_token_loss", result["failure_types"])
         self.assertTrue(result["metrics"]["insertion_safe"]["passed"])
 
+    def test_case_result_includes_text_comparison_and_quantitative_quality(self) -> None:
+        result = run_stt_accuracy_suite.evaluate_case(
+            case_id="code-switch-001",
+            sample_id="cmd-0001",
+            category="code_switch",
+            metrics=["latin_token_preservation", "insertion_safe"],
+            expected="abc def",
+            actual="abc xyz",
+            raw_file="raw/cmd-0001.txt",
+            recovered_file="recovered/cmd-0001.txt",
+        )
+
+        self.assertEqual(result["text_comparison"]["expected_text"], "abc def")
+        self.assertEqual(result["text_comparison"]["raw_text"], "abc xyz")
+        self.assertEqual(result["text_comparison"]["recovered_text"], "abc xyz")
+        self.assertEqual(result["text_comparison"]["normalized_expected"], "abcdef")
+        self.assertEqual(result["text_comparison"]["normalized_raw"], "abcxyz")
+
+        quality = result["quality"]
+        self.assertEqual(quality["edit_distance"], 3)
+        self.assertAlmostEqual(quality["char_error_rate"], 0.4286)
+        self.assertEqual(quality["normalized_edit_distance"], 3)
+        self.assertAlmostEqual(quality["normalized_char_error_rate"], 0.5)
+        self.assertAlmostEqual(quality["text_similarity"], 0.5)
+        self.assertAlmostEqual(quality["word_error_rate"], 0.5)
+        self.assertAlmostEqual(quality["critical_token_precision"], 0.5)
+        self.assertAlmostEqual(quality["critical_token_recall"], 0.5)
+        self.assertAlmostEqual(quality["critical_token_f1"], 0.5)
+        self.assertAlmostEqual(quality["case_score"], 0.55)
+        self.assertEqual(quality["critical_tokens"]["expected"], ["abc", "def"])
+        self.assertEqual(quality["critical_tokens"]["preserved"], ["abc"])
+        self.assertEqual(quality["critical_tokens"]["missing"], ["def"])
+        self.assertEqual(quality["critical_tokens"]["unexpected"], ["xyz"])
+
+    def test_result_json_includes_quality_summary(self) -> None:
+        plan = run_stt_accuracy_suite.RunPlan(
+            suite_id="codex-command-accuracy-v1",
+            input_set="speech/v1",
+            run_id="summary-test",
+            run_root=Path("runs"),
+            run_dir=Path("runs") / "summary-test",
+            config=run_stt_accuracy_suite.RunConfig(
+                model="large-v3",
+                device="cuda",
+                compute_type="float16",
+                language="ko",
+                beam_size=5,
+                initial_prompt=None,
+                token_recovery="none",
+            ),
+            cases=[],
+        )
+        case_results = [
+            run_stt_accuracy_suite.evaluate_case(
+                case_id="code-switch-001",
+                sample_id="cmd-0001",
+                category="code_switch",
+                metrics=["latin_token_preservation", "insertion_safe"],
+                expected="abc def",
+                actual="abc xyz",
+                raw_file="raw/cmd-0001.txt",
+                recovered_file="recovered/cmd-0001.txt",
+            ),
+            run_stt_accuracy_suite.evaluate_case(
+                case_id="code-switch-002",
+                sample_id="cmd-0002",
+                category="code_switch",
+                metrics=["latin_token_preservation", "insertion_safe"],
+                expected="hello",
+                actual="hello",
+                raw_file="raw/cmd-0002.txt",
+                recovered_file="recovered/cmd-0002.txt",
+            ),
+        ]
+
+        result_json = run_stt_accuracy_suite.build_result_json(
+            plan,
+            case_results,
+            elapsed_seconds=1.234,
+        )
+
+        self.assertEqual(result_json["quality_summary"]["average_case_score"], 0.775)
+        self.assertEqual(result_json["quality_summary"]["average_text_similarity"], 0.75)
+        self.assertEqual(
+            result_json["quality_summary"]["average_normalized_char_error_rate"],
+            0.25,
+        )
+        self.assertEqual(result_json["quality_summary"]["average_critical_token_f1"], 0.75)
+
     def test_local_eval_contract_docs_do_not_depend_on_remote_workflow_terms(self) -> None:
         docs = [
             REPO_ROOT / "evals" / "README.md",
