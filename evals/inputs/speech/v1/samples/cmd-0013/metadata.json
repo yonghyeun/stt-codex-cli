@@ -2,5 +2,7 @@
   "sample_id": "cmd-0013",
   "prompt_id": "P13",
   "category": "cli_option",
-  "recording_status": "recorded"
+  "recording_status": "recorded",
+  "expected_text_policy": "actual_spoken_phrase",
+  "rerecord_reason": "CLI option literal expected text was rewritten to match the user's natural spoken phrase."
 }

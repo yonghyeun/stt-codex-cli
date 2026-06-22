@@ -1,1 +1,1 @@
---stt-model large-v3 --stt-device cuda --stt-compute-type float16 조합으로 실행해줘
+에스티티 모델 라지 브이 쓰리, 에스티티 디바이스 쿠다, 에스티티 컴퓨트 타입 플로트 십육 조합으로 실행해줘

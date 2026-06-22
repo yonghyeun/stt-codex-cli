@@ -1,1 +1,1 @@
-evals/stt_accuracy/output/corpus/cmd-0001 폴더 구조 봐줘
+이밸스 에스티티 어큐러시 아웃풋 코퍼스 커맨드 공공공일 폴더 구조 봐줘

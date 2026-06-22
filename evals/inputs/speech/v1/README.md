@@ -47,6 +47,8 @@ evals/inputs/speech/v1/samples/<sample_id>/
 - `prompt_id`
 - `category`
 - `recording_status`
+- `expected_text_policy`
+- `rerecord_reason`
 
 포함하지 않음:
 
@@ -57,6 +59,10 @@ evals/inputs/speech/v1/samples/<sample_id>/
 - model option.
 - run id.
 - result summary.
+
+`expected_text_policy`는 `expected.txt`가 어떤 기준의 text인지 설명한다.
+기본 정책은 Codex 입력창 최종문인 `codex_final_input`이다. 실제 발화 그대로를
+평가해야 하는 재녹음 sample은 `actual_spoken_phrase`를 사용할 수 있다.
 
 metric과 case selection은 평가 트랙의 suite manifest가 소유한다. transcription status와 실행 결과는 평가 트랙의 `runs/<run_id>/`가 소유한다.
 

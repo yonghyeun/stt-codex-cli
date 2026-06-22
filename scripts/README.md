@@ -86,6 +86,24 @@ renderer는 기본적으로 `evals/stt_accuracy/metric_contract.json`을 읽어 
 source metric, direction, failure type 설명을 출력한다. 다른 contract 검증이 필요할 때만
 `--metric-contract <path>`를 사용한다.
 
+## Speech Sample Recording
+
+sample id 목록에서 아직 `audio.wav`가 없는 다음 sample 하나를 선택해 녹음한다.
+배치 duration 녹음이 아니라 generator처럼 한 번 호출할 때 한 sample만 처리한다.
+
+```bash
+scripts/record_speech_samples.sh \
+  cmd-0009 cmd-0010 cmd-0011 cmd-0012 cmd-0013 cmd-0014 cmd-0015 cmd-0016
+```
+
+- 각 sample마다 `expected.txt` 첫 줄을 보여준다.
+- 기본 동작은 목록 중 첫 번째 missing `audio.wav` sample 하나를 녹음하는 것이다.
+- 녹음은 `scripts/push_to_talk.py --record-only`를 재사용한다.
+- 기본 stdin-repeat backend에서는 `t`를 누르고 있는 동안 녹음하고, 떼면 종료한다.
+- 녹음 결과는 `evals/inputs/speech/v1/samples/<sample_id>/audio.wav`에 쓴다.
+- 특정 sample을 다시 녹음하려면 `--sample-id <id> --force`를 사용한다.
+- `--print-next` 또는 `--dry-run`은 녹음 없이 다음 대상만 출력한다.
+
 ## Prototype 8: Manual Token Recovery
 
 수동 memory에 등록된 표현만 복원한다.
