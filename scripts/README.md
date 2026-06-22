@@ -62,6 +62,7 @@ scripts/run_stt_accuracy_suite.py \
 - baseline에서는 token recovery를 쓰지 않으며 `recovered/<sample_id>.txt`는 raw와 같은 텍스트를 쓴다.
 - `result.json`은 metric 결과, failure taxonomy summary, `expected_text`/`raw_text`/`recovered_text` 비교, 정량 품질 지표를 소유한다.
 - 정량 품질 지표는 `char_error_rate`, `normalized_char_error_rate`, `text_similarity`, `word_error_rate`, `critical_token_precision`, `critical_token_recall`, `critical_token_f1`, `case_score`를 포함한다.
+- metric 설명과 renderer routing은 `evals/stt_accuracy/metric_contract.json`이 소유한다.
 - Git-tracked report에는 raw transcript 전체를 붙이지 않는다.
 
 `result.json`을 사람이 읽는 Markdown으로 확인한다.
@@ -80,6 +81,10 @@ scripts/render_stt_accuracy_result.py \
 ```
 
 renderer 출력은 stdout으로만 쓴다. `--show-text` 출력에는 raw transcript 본문이 포함되므로 Git-tracked report에 그대로 붙이지 않는다.
+
+renderer는 기본적으로 `evals/stt_accuracy/metric_contract.json`을 읽어 summary metric,
+source metric, direction, failure type 설명을 출력한다. 다른 contract 검증이 필요할 때만
+`--metric-contract <path>`를 사용한다.
 
 ## Prototype 8: Manual Token Recovery
 

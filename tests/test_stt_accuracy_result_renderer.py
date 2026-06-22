@@ -87,6 +87,76 @@ class SttAccuracyResultRendererTest(unittest.TestCase):
         )
         self.assertNotIn("### code-switch-001", markdown)
 
+    def test_render_markdown_routes_metric_contract_descriptions(self) -> None:
+        result = {
+            "schema_version": 1,
+            "suite_id": "codex-command-accuracy-v1",
+            "input_set": "speech/v1",
+            "run_id": "run-001",
+            "config": {},
+            "elapsed_seconds": 1.0,
+            "total": 1,
+            "failed": 1,
+            "category_summary": {},
+            "failure_summary": {
+                "latin_token_loss": 1,
+            },
+            "quality_summary": {
+                "average_case_score": 0.75,
+                "average_text_similarity": 0.8,
+                "average_normalized_char_error_rate": 0.2,
+                "average_critical_token_f1": 0.7,
+            },
+            "cases": [],
+        }
+
+        markdown = render_stt_accuracy_result.render_markdown(result)
+
+        self.assertIn("## Metric Contract", markdown)
+        self.assertIn(
+            "| average_case_score | case_score | 높을수록 좋음 |", markdown
+        )
+        self.assertIn(
+            "| average_normalized_char_error_rate | normalized_char_error_rate | 낮을수록 좋음 |",
+            markdown,
+        )
+        self.assertIn(
+            "| latin_token_loss | expected의 Latin-script token 보존 실패. |",
+            markdown,
+        )
+
+    def test_default_metric_contract_covers_renderer_summary_and_failures(self) -> None:
+        contract = render_stt_accuracy_result.load_metric_contract()
+
+        quality_metrics = contract["quality_metrics"]
+        summary_routes = contract["summary_routes"]
+        failure_types = contract["failure_types"]
+
+        for summary_key in (
+            "average_case_score",
+            "average_text_similarity",
+            "average_normalized_char_error_rate",
+            "average_critical_token_f1",
+        ):
+            source_metric = summary_routes[summary_key]
+            self.assertIn(source_metric, quality_metrics)
+            self.assertIn("description", quality_metrics[source_metric])
+            self.assertIn("direction", quality_metrics[source_metric])
+
+        for failure_type in (
+            "korean_command_mismatch",
+            "latin_token_loss",
+            "file_path_loss",
+            "cli_option_loss",
+            "code_identifier_loss",
+            "hallucination",
+            "empty_transcript",
+            "punctuation_only",
+            "insertion_unsafe",
+        ):
+            self.assertIn(failure_type, failure_types)
+            self.assertIn("description", failure_types[failure_type])
+
     def test_render_markdown_can_include_full_text_blocks(self) -> None:
         result = {
             "schema_version": 1,

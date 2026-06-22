@@ -8,6 +8,9 @@ from pathlib import Path
 from typing import Any
 
 
+DEFAULT_METRIC_CONTRACT = Path("evals/stt_accuracy/metric_contract.json")
+
+
 def load_result(path: Path) -> dict[str, Any]:
     try:
         return json.loads(path.read_text(encoding="utf-8"))
@@ -15,6 +18,15 @@ def load_result(path: Path) -> dict[str, Any]:
         raise SystemExit(f"result file not found: {path}") from error
     except json.JSONDecodeError as error:
         raise SystemExit(f"invalid result json: {path}: {error}") from error
+
+
+def load_metric_contract(path: Path = DEFAULT_METRIC_CONTRACT) -> dict[str, Any]:
+    if not path.exists():
+        return {}
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as error:
+        raise SystemExit(f"invalid metric contract json: {path}: {error}") from error
 
 
 def format_number(value: Any) -> str:
@@ -67,6 +79,73 @@ def render_quality_summary(result: dict[str, Any]) -> list[str]:
         "average_critical_token_f1",
     ):
         rows.append(f"| {key} | {format_number(summary.get(key))} |")
+    return rows
+
+
+def direction_label(value: Any) -> str:
+    labels = {
+        "higher_is_better": "높을수록 좋음",
+        "lower_is_better": "낮을수록 좋음",
+    }
+    return labels.get(str(value), str(value))
+
+
+def render_metric_contract(
+    result: dict[str, Any],
+    metric_contract: dict[str, Any],
+) -> list[str]:
+    if not metric_contract:
+        return []
+
+    quality_metrics = metric_contract.get("quality_metrics", {})
+    summary_routes = metric_contract.get("summary_routes", {})
+    failure_types = metric_contract.get("failure_types", {})
+    quality_summary = result.get("quality_summary", {})
+    failure_summary = result.get("failure_summary", {})
+
+    rows = [
+        "## Metric Contract",
+        "",
+        "| summary_metric | source_metric | direction | description |",
+        "| --- | --- | --- | --- |",
+    ]
+    for summary_key in quality_summary:
+        source_metric = summary_routes.get(summary_key, summary_key)
+        metric = quality_metrics.get(source_metric, {})
+        rows.append(
+            "| "
+            + " | ".join(
+                [
+                    markdown_cell(summary_key),
+                    markdown_cell(source_metric),
+                    markdown_cell(direction_label(metric.get("direction", ""))),
+                    markdown_cell(metric.get("description", "")),
+                ]
+            )
+            + " |"
+        )
+
+    if failure_summary:
+        rows.extend(
+            [
+                "",
+                "| failure_type | description |",
+                "| --- | --- |",
+            ]
+        )
+        for failure_type in sorted(failure_summary):
+            failure = failure_types.get(failure_type, {})
+            rows.append(
+                "| "
+                + " | ".join(
+                    [
+                        markdown_cell(failure_type),
+                        markdown_cell(failure.get("description", "")),
+                    ]
+                )
+                + " |"
+            )
+
     return rows
 
 
@@ -165,8 +244,10 @@ def render_markdown(
     *,
     show_text: bool = False,
     max_text_chars: int = 80,
+    metric_contract: dict[str, Any] | None = None,
 ) -> str:
     config = result.get("config", {})
+    contract = load_metric_contract() if metric_contract is None else metric_contract
     rows: list[str] = [
         "# STT Accuracy Result",
         "",
@@ -190,6 +271,8 @@ def render_markdown(
         ),
         "",
         *render_quality_summary(result),
+        "",
+        *render_metric_contract(result, contract),
         "",
         *render_category_summary(result),
         "",
@@ -218,6 +301,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         default=80,
         help="Maximum expected/raw snippet length in the case table. Default: 80.",
     )
+    parser.add_argument(
+        "--metric-contract",
+        default=str(DEFAULT_METRIC_CONTRACT),
+        help="Metric contract JSON path. Default: evals/stt_accuracy/metric_contract.json.",
+    )
     return parser.parse_args(argv)
 
 
@@ -228,6 +316,7 @@ def main_to_text(argv: list[str] | None = None) -> str:
         result,
         show_text=args.show_text,
         max_text_chars=args.max_text_chars,
+        metric_contract=load_metric_contract(Path(args.metric_contract)),
     )
 
 

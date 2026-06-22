@@ -1,0 +1,144 @@
+{
+  "schema_version": 1,
+  "contract_id": "stt-accuracy-metric-contract-v1",
+  "quality_metrics": {
+    "edit_distance": {
+      "label": "edit distance",
+      "direction": "lower_is_better",
+      "unit": "count",
+      "description": "expected와 recovered 사이 문자 단위 수정 횟수."
+    },
+    "char_error_rate": {
+      "label": "CER",
+      "direction": "lower_is_better",
+      "unit": "ratio",
+      "description": "원문 기준 character edit distance / expected character count."
+    },
+    "normalized_edit_distance": {
+      "label": "normalized edit distance",
+      "direction": "lower_is_better",
+      "unit": "count",
+      "description": "공백과 문장부호를 제거한 normalized text 기준 문자 단위 수정 횟수."
+    },
+    "normalized_char_error_rate": {
+      "label": "normalized CER",
+      "direction": "lower_is_better",
+      "unit": "ratio",
+      "description": "공백과 문장부호를 제거한 normalized text 기준 character error rate."
+    },
+    "text_similarity": {
+      "label": "text similarity",
+      "direction": "higher_is_better",
+      "unit": "score",
+      "description": "normalized edit distance 기반 0.0에서 1.0 사이 텍스트 유사도."
+    },
+    "word_error_rate": {
+      "label": "WER",
+      "direction": "lower_is_better",
+      "unit": "ratio",
+      "description": "공백 기준 word edit distance / expected word count. 한국어에서는 보조 지표."
+    },
+    "critical_token_precision": {
+      "label": "critical token precision",
+      "direction": "higher_is_better",
+      "unit": "ratio",
+      "description": "transcript의 Latin-script token 중 expected에 있던 비율."
+    },
+    "critical_token_recall": {
+      "label": "critical token recall",
+      "direction": "higher_is_better",
+      "unit": "ratio",
+      "description": "expected의 Latin-script token 중 transcript에 보존된 비율."
+    },
+    "critical_token_f1": {
+      "label": "critical token F1",
+      "direction": "higher_is_better",
+      "unit": "score",
+      "description": "critical token precision과 recall의 F1."
+    },
+    "case_score": {
+      "label": "case score",
+      "direction": "higher_is_better",
+      "unit": "score",
+      "description": "text_similarity, critical_token_f1, insertion-safe 여부, hallucination penalty를 조합한 0.0에서 1.0 사이 점수."
+    }
+  },
+  "summary_routes": {
+    "average_case_score": "case_score",
+    "average_text_similarity": "text_similarity",
+    "average_normalized_char_error_rate": "normalized_char_error_rate",
+    "average_critical_token_f1": "critical_token_f1"
+  },
+  "failure_types": {
+    "korean_command_mismatch": {
+      "description": "한국어 명령의 normalized match 실패."
+    },
+    "latin_token_loss": {
+      "description": "expected의 Latin-script token 보존 실패."
+    },
+    "file_path_loss": {
+      "description": "파일명 또는 경로 token 보존 실패."
+    },
+    "cli_option_loss": {
+      "description": "--option 형태 CLI option 보존 실패."
+    },
+    "code_identifier_loss": {
+      "description": "함수명, 모듈명, snake_case, dotted identifier 보존 실패."
+    },
+    "hallucination": {
+      "description": "expected에 없는 Latin-script token이 raw transcript에 추가됨."
+    },
+    "empty_transcript": {
+      "description": "raw transcript가 비어 있음."
+    },
+    "punctuation_only": {
+      "description": "raw transcript가 문장부호뿐임."
+    },
+    "insertion_unsafe": {
+      "description": "Codex CLI 입력창에 삽입할 최소 텍스트 조건을 만족하지 못함."
+    }
+  },
+  "metric_routes": {
+    "korean_command_match": {
+      "quality_priority": [
+        "normalized_char_error_rate",
+        "text_similarity"
+      ],
+      "failure_type": "korean_command_mismatch"
+    },
+    "latin_token_preservation": {
+      "quality_priority": [
+        "critical_token_recall",
+        "critical_token_f1"
+      ],
+      "failure_type": "latin_token_loss"
+    },
+    "file_path_preservation": {
+      "quality_priority": [
+        "critical_token_recall",
+        "critical_token_f1"
+      ],
+      "failure_type": "file_path_loss"
+    },
+    "cli_option_preservation": {
+      "quality_priority": [
+        "critical_token_recall",
+        "critical_token_f1"
+      ],
+      "failure_type": "cli_option_loss"
+    },
+    "code_identifier_preservation": {
+      "quality_priority": [
+        "critical_token_recall",
+        "critical_token_f1"
+      ],
+      "failure_type": "code_identifier_loss"
+    },
+    "insertion_safe": {
+      "quality_priority": [
+        "case_score"
+      ],
+      "failure_type": "insertion_unsafe"
+    }
+  }
+}
