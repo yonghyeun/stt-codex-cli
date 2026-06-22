@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import json
 import subprocess
+import threading
 from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Protocol
+from typing import Protocol, TextIO
 
 from stt_runtime.recording import StatusFn
 
@@ -52,6 +54,39 @@ class SubprocessRunner(Protocol):
         ...
 
 
+class WorkerProcess(Protocol):
+    stdin: TextIO | None
+    stdout: TextIO | None
+    stderr: TextIO | None
+
+    def poll(self) -> int | None:
+        ...
+
+    def terminate(self) -> None:
+        ...
+
+    def kill(self) -> None:
+        ...
+
+    def wait(self, timeout: float | None = None) -> int:
+        ...
+
+
+class WorkerProcessFactory(Protocol):
+    def __call__(
+        self,
+        command: Sequence[str],
+        *,
+        cwd: Path,
+        text: bool,
+        stdin: int,
+        stdout: int,
+        stderr: int,
+        bufsize: int,
+    ) -> WorkerProcess:
+        ...
+
+
 class SubprocessTranscriptionClient:
     def __init__(
         self,
@@ -96,6 +131,167 @@ class SubprocessTranscriptionClient:
         command = [
             str(self._repo_root / "scripts/transcribe.sh"),
             str(request.audio_file),
+            "--model",
+            self._config.model,
+            "--language",
+            self._config.language,
+            "--device",
+            self._config.device,
+            "--compute-type",
+            self._config.compute_type,
+            "--beam-size",
+            str(self._config.beam_size),
+        ]
+        if self._config.initial_prompt:
+            command.extend(["--initial-prompt", self._config.initial_prompt])
+        if not self._config.vad_filter:
+            command.append("--no-vad-filter")
+        return command
+
+
+class PersistentWorkerTranscriptionClient:
+    def __init__(
+        self,
+        *,
+        repo_root: Path,
+        config: TranscriptionConfig,
+        status: StatusFn,
+        process_factory: WorkerProcessFactory = subprocess.Popen,
+    ) -> None:
+        self._repo_root = repo_root
+        self._config = config
+        self._status = status
+        self._process_factory = process_factory
+        self._process: WorkerProcess | None = None
+        self._stderr_thread: threading.Thread | None = None
+        self._stderr_lines: list[str] = []
+
+    def transcribe(self, request: TranscriptionRequest) -> TranscriptionResult:
+        process = self._ensure_worker()
+        if process.stdin is None or process.stdout is None:
+            raise RuntimeError("STT worker pipes are not available")
+
+        self._status("transcribing...")
+        stderr_start = len(self._stderr_lines)
+        payload = json.dumps(
+            {"audio_file": str(request.audio_file)},
+            ensure_ascii=False,
+        )
+        try:
+            process.stdin.write(payload + "\n")
+            process.stdin.flush()
+        except BrokenPipeError as error:
+            raise RuntimeError("STT worker closed before accepting request") from error
+
+        line = process.stdout.readline()
+        if not line:
+            raise RuntimeError("STT worker stopped without response")
+
+        try:
+            response = json.loads(line)
+        except json.JSONDecodeError as error:
+            raise RuntimeError("STT worker returned invalid JSON") from error
+
+        if not isinstance(response, dict):
+            raise RuntimeError("STT worker returned invalid response")
+        if response.get("ok") is not True:
+            error = response.get("error")
+            if not isinstance(error, str) or not error:
+                error = "unknown worker error"
+            raise RuntimeError(f"STT worker failed: {error}")
+
+        transcript = response.get("transcript")
+        if not isinstance(transcript, str):
+            raise RuntimeError("STT worker response did not include transcript")
+        return TranscriptionResult(
+            transcript=transcript.strip(),
+            stderr_lines=tuple(self._stderr_lines[stderr_start:]),
+        )
+
+    def close(self) -> None:
+        process = self._process
+        self._process = None
+        if process is None:
+            return
+
+        if process.stdin is not None:
+            try:
+                process.stdin.close()
+            except OSError:
+                pass
+
+        if process.poll() is not None:
+            self._join_stderr_thread()
+            return
+
+        try:
+            process.wait(timeout=0.5)
+            self._join_stderr_thread()
+            return
+        except subprocess.TimeoutExpired:
+            pass
+
+        if process.poll() is not None:
+            return
+
+        process.terminate()
+        try:
+            process.wait(timeout=2.0)
+        except subprocess.TimeoutExpired:
+            process.kill()
+            process.wait(timeout=2.0)
+        self._join_stderr_thread()
+
+    def _ensure_worker(self) -> WorkerProcess:
+        if self._process is not None:
+            if self._process.poll() is not None:
+                raise RuntimeError("STT worker exited before request")
+            return self._process
+
+        command = self._build_command()
+        self._status("starting stt worker...")
+        process = self._process_factory(
+            command,
+            cwd=self._repo_root,
+            text=True,
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            bufsize=1,
+        )
+        if process.stdin is None or process.stdout is None:
+            raise RuntimeError("STT worker pipes are not available")
+        self._process = process
+        self._start_stderr_thread(process)
+        return process
+
+    def _start_stderr_thread(self, process: WorkerProcess) -> None:
+        if process.stderr is None:
+            return
+        self._stderr_thread = threading.Thread(
+            target=self._drain_stderr,
+            args=(process.stderr,),
+            daemon=True,
+        )
+        self._stderr_thread.start()
+
+    def _drain_stderr(self, stderr: TextIO) -> None:
+        for raw_line in stderr:
+            line = raw_line.strip()
+            if not line:
+                continue
+            self._stderr_lines.append(line)
+            self._status(f"stt: {line}")
+
+    def _join_stderr_thread(self) -> None:
+        if self._stderr_thread is None:
+            return
+        self._stderr_thread.join(timeout=1.0)
+        self._stderr_thread = None
+
+    def _build_command(self) -> list[str]:
+        command = [
+            str(self._repo_root / "scripts/transcribe_worker.sh"),
             "--model",
             self._config.model,
             "--language",

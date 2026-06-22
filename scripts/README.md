@@ -533,3 +533,16 @@ scripts/transcribe.sh fixtures/generated/kss-row-00000/audio.wav --model large-v
 - fixture 비교는 기본적으로 공백과 문장부호를 제거한 normalized match를 사용한다.
 - suite 검증은 단어 추가, 누락, 치환을 실패로 본다.
 - KSS fixture는 `cc-by-nc-sa-4.0`이므로 비상업 실험용으로만 사용한다.
+
+Wrapper session에서 model load를 한 번만 수행하려면 persistent worker backend를
+명시한다. audio handoff는 여전히 임시 WAV path다.
+
+```bash
+scripts/stt_codex.py --stt-backend worker --stt-model large-v3 --stt-device cuda --stt-compute-type float16
+```
+
+- 기본 backend는 `subprocess`다.
+- `worker` backend는 `scripts/transcribe_worker.sh`가 CUDA library path를 준비한 뒤
+  `scripts/transcribe_worker.py`를 long-lived process로 실행한다.
+- worker protocol은 stdin/stdout newline-delimited JSON이다.
+- worker status와 model load log는 stderr에 출력한다.

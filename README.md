@@ -73,8 +73,9 @@ Storage:
 Current core scripts:
 
 - `scripts/stt_codex.py`: 현재 메인 entrypoint. CLI option과 backward-compatible wrapper surface를 담당한다.
-- `scripts/transcribe.sh`: venv/CUDA library path를 준비하고 `transcribe.py`를 실행한다.
+- `scripts/transcribe.sh`: venv/CUDA library path를 준비하고 `transcribe.py`를 subprocess로 실행한다.
 - `scripts/transcribe.py`: faster-whisper STT 실행을 담당한다.
+- `scripts/transcribe_worker.sh`, `scripts/transcribe_worker.py`: wrapper session 안에서 faster-whisper model을 한 번 load하고 WAV path request를 반복 처리하는 persistent worker를 담당한다.
 - `scripts/run_fixture_suite.sh`, `scripts/run_fixture_suite.py`: fixture regression을 담당한다.
 - `scripts/record.sh`, `scripts/push_to_talk.py`, `scripts/stt_clipboard.sh`, `scripts/record_clipboard.sh`, `scripts/copy_text.sh`: 보조 실행 흐름이다.
 
@@ -87,7 +88,7 @@ Current mini-layer modules:
 - `stt_runtime/terminal.py`: terminal raw mode, cwd validation, window-size sync.
 - `stt_runtime/child_process.py`: child PTY spawn과 wait status 처리.
 - `stt_runtime/recording.py`: temporary WAV와 `arecord` recording lifecycle.
-- `stt_runtime/transcription.py`: `scripts/transcribe.sh` subprocess adapter.
+- `stt_runtime/transcription.py`: `scripts/transcribe.sh` subprocess adapter와 `scripts/transcribe_worker.sh` persistent worker adapter.
 - `stt_runtime/run_artifacts.py`: `--save-run` artifact persistence.
 - `stt_features/codex_input.py`: fixed-text injection과 Ctrl+T STT injection flow.
 
@@ -294,7 +295,7 @@ E2E는 사용자가 실제 장비로 발화한 뒤 확인한다.
 ## Current Capability Surface
 
 - Microphone recording: `scripts/record.sh`, `scripts/record_clipboard.sh`, `scripts/push_to_talk.py`, `scripts/stt_codex.py`.
-- Local STT conversion: `scripts/transcribe.sh`, `scripts/transcribe.py`.
+- Local STT conversion: `scripts/transcribe.sh`, `scripts/transcribe.py`, `scripts/transcribe_worker.sh`, `scripts/transcribe_worker.py`.
 - Fixture regression: `scripts/run_fixture_suite.sh`, `scripts/run_fixture_suite.py`, `scripts/compare_transcript.py`, `scripts/analyze_code_switch_suite.py`.
 - Clipboard helper flow: `scripts/copy_text.sh`, `scripts/stt_clipboard.sh`, `scripts/record_clipboard.sh`.
 - Manual token recovery script: `scripts/recover_tokens.py`.
@@ -321,6 +322,7 @@ E2E는 사용자가 실제 장비로 발화한 뒤 확인한다.
 - 녹음본과 transcript는 기본적으로 영구 저장하지 않는다.
 - 명시적 저장 옵션을 켰을 때만 run artifact를 남긴다.
 - raw 입력 mode와 manual token recovery script는 서로 분리되어 있다.
+- 기본 STT backend는 subprocess다. `scripts/stt_codex.py --stt-backend worker`를 명시하면 wrapper session 안에서 persistent worker를 사용한다.
 
 ## Repository Shape
 
