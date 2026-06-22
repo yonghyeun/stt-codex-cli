@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import sys
 import time
@@ -75,6 +76,10 @@ def parse_args() -> argparse.Namespace:
         "--output",
         help="Optional path to write transcript text.",
     )
+    parser.add_argument(
+        "--timing-json",
+        help="Optional path to write machine-readable latency timings.",
+    )
     vad_default = env_flag("STT_VAD_FILTER", True)
     vad_group = parser.add_mutually_exclusive_group()
     vad_group.add_argument(
@@ -116,6 +121,10 @@ def initial_prompt_arg(initial_prompt: str | None) -> str | None:
     return prompt or None
 
 
+def round_elapsed(value: float) -> float:
+    return round(value, 6)
+
+
 def main() -> int:
     args = parse_args()
     audio_file = Path(args.audio_file)
@@ -133,13 +142,16 @@ def main() -> int:
         file=sys.stderr,
     )
 
+    model_load_started_at = time.monotonic()
     model = WhisperModel(
         args.model,
         device=device,
         compute_type=compute_type,
         download_root=args.model_dir,
     )
+    model_load_elapsed = time.monotonic() - model_load_started_at
 
+    transcribe_call_started_at = time.monotonic()
     segments, info = model.transcribe(
         str(audio_file),
         language=language_arg(args.language),
@@ -148,20 +160,68 @@ def main() -> int:
         vad_filter=args.vad_filter,
         condition_on_previous_text=False,
     )
+    transcribe_call_elapsed = time.monotonic() - transcribe_call_started_at
 
     parts: list[str] = []
+    segment_count = 0
+    segment_iteration_started_at = time.monotonic()
     for segment in segments:
+        segment_count += 1
         text = segment.text.strip()
         if text:
             parts.append(text)
+    segment_iteration_elapsed = time.monotonic() - segment_iteration_started_at
 
     transcript = " ".join(parts).strip()
+    output_write_elapsed = 0.0
     if args.output:
+        output_write_started_at = time.monotonic()
         output_path = Path(args.output)
         output_path.parent.mkdir(parents=True, exist_ok=True)
         output_path.write_text(transcript + "\n", encoding="utf-8")
+        output_write_elapsed = time.monotonic() - output_write_started_at
 
     elapsed = time.monotonic() - started_at
+    if args.timing_json:
+        timing_path = Path(args.timing_json)
+        timing_path.parent.mkdir(parents=True, exist_ok=True)
+        timing_path.write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "audio_file": str(audio_file),
+                    "model": args.model,
+                    "device": device,
+                    "compute_type": compute_type,
+                    "language": args.language,
+                    "beam_size": args.beam_size,
+                    "vad_filter": args.vad_filter,
+                    "initial_prompt": initial_prompt_arg(args.initial_prompt),
+                    "audio_duration_seconds": round_elapsed(info.duration),
+                    "detected_language": info.language,
+                    "language_probability": round_elapsed(info.language_probability),
+                    "segment_count": segment_count,
+                    "transcript_character_count": len(transcript),
+                    "model_load_elapsed_seconds": round_elapsed(model_load_elapsed),
+                    "transcribe_call_elapsed_seconds": round_elapsed(
+                        transcribe_call_elapsed
+                    ),
+                    "segment_iteration_elapsed_seconds": round_elapsed(
+                        segment_iteration_elapsed
+                    ),
+                    "decode_elapsed_seconds": round_elapsed(
+                        transcribe_call_elapsed + segment_iteration_elapsed
+                    ),
+                    "output_write_elapsed_seconds": round_elapsed(output_write_elapsed),
+                    "internal_elapsed_seconds": round_elapsed(elapsed),
+                },
+                ensure_ascii=False,
+                indent=2,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+
     print(transcript)
     print(
         "transcribed: "
