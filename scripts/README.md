@@ -64,6 +64,23 @@ scripts/run_stt_accuracy_suite.py \
 - 정량 품질 지표는 `char_error_rate`, `normalized_char_error_rate`, `text_similarity`, `word_error_rate`, `critical_token_precision`, `critical_token_recall`, `critical_token_f1`, `case_score`를 포함한다.
 - Git-tracked report에는 raw transcript 전체를 붙이지 않는다.
 
+`result.json`을 사람이 읽는 Markdown으로 확인한다.
+
+```bash
+scripts/render_stt_accuracy_result.py \
+  evals/stt_accuracy/runs/20260621-large-v3-cuda-float16-baseline/result.json
+```
+
+case별 full text 비교가 필요하면 local inspection 용도로만 `--show-text`를 사용한다.
+
+```bash
+scripts/render_stt_accuracy_result.py \
+  evals/stt_accuracy/runs/20260621-large-v3-cuda-float16-baseline/result.json \
+  --show-text
+```
+
+renderer 출력은 stdout으로만 쓴다. `--show-text` 출력에는 raw transcript 본문이 포함되므로 Git-tracked report에 그대로 붙이지 않는다.
+
 ## Prototype 8: Manual Token Recovery
 
 수동 memory에 등록된 표현만 복원한다.

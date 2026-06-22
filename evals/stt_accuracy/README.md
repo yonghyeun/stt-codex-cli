@@ -224,6 +224,20 @@ pass/fail은 유지한다. 단, `result.json`은 실패 정도를 판단할 수 
 CLI option, 코드 식별자, 한영 혼합 발화는 `critical_token_recall`과
 `critical_token_f1`을 우선 본다.
 
+## Human-Readable Result View
+
+`result.json`은 machine-readable source다. 사람이 읽는 view는 script로 생성한다.
+
+```bash
+scripts/render_stt_accuracy_result.py \
+  evals/stt_accuracy/runs/<run_id>/result.json
+```
+
+기본 출력은 Markdown summary와 case table이다. `--show-text`를 주면 case별
+`expected_text`, `raw_text`, `recovered_text` 전체를 Markdown code block으로 출력한다.
+이 출력은 local inspection 용도다. raw transcript 전체가 포함된 출력은 Git-tracked
+report에 그대로 복사하지 않는다.
+
 ## Failure Taxonomy
 
 하네스는 case별 `failure_types`를 같은 이름으로 기록한다.
