@@ -25,6 +25,7 @@ from stt_core.transcription_prompt import DEFAULT_KOREAN_PHONETIC_INITIAL_PROMPT
 from stt_features.codex_input import (
     inject_transcript as inject_feature_transcript,
     passthrough,
+    resolve_audio_handoff,
 )
 from stt_runtime.child_process import spawn_child
 from stt_runtime.recording import recording_config
@@ -45,6 +46,7 @@ DEFAULT_MAX_DURATION = 60.0
 DEFAULT_MIN_DURATION = 0.15
 DEFAULT_RUN_OUTPUT_DIR = "output/runs"
 DEFAULT_STT_BACKEND = "subprocess"
+DEFAULT_AUDIO_HANDOFF = "auto"
 DEFAULT_STT_INITIAL_PROMPT = DEFAULT_KOREAN_PHONETIC_INITIAL_PROMPT
 PARENT_PREFIX = "[stt-parent]"
 
@@ -147,6 +149,16 @@ def parse_args() -> argparse.Namespace:
         choices=("subprocess", "worker"),
         default=os.environ.get("STT_BACKEND", DEFAULT_STT_BACKEND),
         help=f"STT execution backend. Default: {DEFAULT_STT_BACKEND}",
+    )
+    parser.add_argument(
+        "--audio-handoff",
+        choices=("auto", "file", "buffer"),
+        default=os.environ.get("STT_AUDIO_HANDOFF", DEFAULT_AUDIO_HANDOFF),
+        help=(
+            "Audio handoff path for STT mode. "
+            "auto uses buffer only with worker backend and no save/debug audio options. "
+            f"Default: {DEFAULT_AUDIO_HANDOFF}"
+        ),
     )
     parser.add_argument(
         "--stt-language",
@@ -329,6 +341,10 @@ def parent_banner(args: argparse.Namespace, argv: list[str], cwd: str | None) ->
                 f"ptt key: {args.inject_key}; release gap {args.release_gap:g}s; Enter still manual",
             )
             parent_status(args, f"stt backend: {args.stt_backend}")
+            parent_status(
+                args,
+                f"audio handoff: {args.audio_handoff} -> {resolve_audio_handoff(args)}",
+            )
             if args.save_run:
                 parent_status(args, f"run artifacts: {resolve_run_output_dir(args)}")
     parent_status(args, "child output follows")

@@ -12,10 +12,11 @@ from pathlib import Path
 from stt_core.transcript import transcript_has_text
 from stt_runtime.child_process import decode_wait_status, reap_child
 from stt_runtime.recording import (
+    RecordedAudio,
     RecordingState,
-    cleanup_audio,
+    cleanup_recorded_audio,
     start_recording,
-    stop_recording,
+    stop_recording_result,
 )
 from stt_runtime.run_artifacts import save_run_artifacts
 from stt_runtime.terminal import copy_window_size
@@ -79,6 +80,81 @@ def create_transcription_client(
     raise RuntimeError(f"unsupported STT backend: {backend}")
 
 
+def resolve_audio_handoff(args: object) -> str:
+    requested = getattr(args, "audio_handoff", "auto")
+    backend = getattr(args, "stt_backend", "subprocess")
+    save_run = bool(getattr(args, "save_run", False))
+    keep_audio = bool(getattr(args, "keep_audio", False))
+
+    if requested == "file":
+        return "file"
+    if requested == "buffer":
+        if backend == "worker" and not save_run and not keep_audio:
+            return "buffer"
+        return "file"
+    if requested != "auto":
+        raise RuntimeError(f"unsupported audio handoff: {requested}")
+    if backend == "worker" and not save_run and not keep_audio:
+        return "buffer"
+    return "file"
+
+
+def transcription_request_from_recorded_audio(
+    recorded_audio: RecordedAudio,
+) -> TranscriptionRequest:
+    if recorded_audio.audio_bytes is not None:
+        if not recorded_audio.audio_bytes:
+            raise RuntimeError("recording did not produce audio bytes")
+        return TranscriptionRequest(
+            audio_bytes=recorded_audio.audio_bytes,
+            audio_format="wav",
+        )
+    if recorded_audio.audio_file is None:
+        raise RuntimeError("recording did not produce audio for transcription")
+    return TranscriptionRequest(audio_file=recorded_audio.audio_file)
+
+
+def save_and_cleanup_recorded_audio(
+    *,
+    args: object,
+    repo_root: Path,
+    child_command: list[str],
+    recorded_audio: RecordedAudio,
+    transcript: str,
+    injected: bool,
+    outcome: str,
+    error_message: str | None,
+    transcription_config: TranscriptionConfig,
+    status: StatusFn,
+) -> None:
+    if recorded_audio.audio_file is not None:
+        save_run_artifacts(
+            repo_root=repo_root,
+            save_run=args.save_run,
+            keep_audio=args.keep_audio,
+            run_output_dir=args.run_output_dir,
+            audio_file=recorded_audio.audio_file,
+            transcript=transcript,
+            started_at=recorded_audio.started_at,
+            elapsed=recorded_audio.elapsed,
+            injected=injected,
+            outcome=outcome,
+            error=error_message,
+            stt=transcription_metadata(transcription_config),
+            child_command=child_command,
+            child_cwd=args.cwd,
+            status=status,
+        )
+    elif args.save_run or args.keep_audio:
+        raise RuntimeError("save/debug audio options require file-backed audio")
+
+    cleanup_recorded_audio(
+        keep_audio=args.keep_audio,
+        recorded_audio=recorded_audio,
+        status=status,
+    )
+
+
 def inject_transcript(status: StatusFn, child_fd: int, transcript: str) -> bool:
     if not transcript_has_text(transcript):
         status("empty transcript; nothing injected")
@@ -101,20 +177,20 @@ def finish_recording_and_inject(
     transcription_client: TranscriptionClient,
     transcription_config: TranscriptionConfig,
 ) -> None:
-    audio_file, elapsed, started_at = stop_recording(state=state, status=status)
+    recorded_audio = stop_recording_result(state=state, status=status)
     transcript = ""
     injected = False
     outcome = "unknown"
     error_message: str | None = None
     try:
-        if elapsed < args.min_duration:
+        if recorded_audio.elapsed < args.min_duration:
             status(
-                f"recording too short: {elapsed:.2f}s < {args.min_duration:g}s; skipped STT"
+                f"recording too short: {recorded_audio.elapsed:.2f}s < {args.min_duration:g}s; skipped STT"
             )
             outcome = "skipped_short_recording"
             return
         result = transcription_client.transcribe(
-            TranscriptionRequest(audio_file=audio_file)
+            transcription_request_from_recorded_audio(recorded_audio)
         )
         transcript = result.transcript
         injected = inject_transcript(status, child_fd, transcript)
@@ -124,26 +200,16 @@ def finish_recording_and_inject(
         error_message = str(error)
         raise
     finally:
-        save_run_artifacts(
+        save_and_cleanup_recorded_audio(
+            args=args,
             repo_root=repo_root,
-            save_run=args.save_run,
-            keep_audio=args.keep_audio,
-            run_output_dir=args.run_output_dir,
-            audio_file=audio_file,
+            child_command=child_command,
+            recorded_audio=recorded_audio,
             transcript=transcript,
-            started_at=started_at,
-            elapsed=elapsed,
             injected=injected,
             outcome=outcome,
-            error=error_message,
-            stt=transcription_metadata(transcription_config),
-            child_command=child_command,
-            child_cwd=args.cwd,
-            status=status,
-        )
-        cleanup_audio(
-            keep_audio=args.keep_audio,
-            audio_file=audio_file,
+            error_message=error_message,
+            transcription_config=transcription_config,
             status=status,
         )
 
@@ -201,7 +267,12 @@ def handle_stt_ptt_input(
             os.write(child_fd, data[start:index])
 
         if not state.active():
-            start_recording(temp_dir=args.temp_dir, state=state, status=status)
+            start_recording(
+                temp_dir=args.temp_dir,
+                state=state,
+                status=status,
+                handoff=resolve_audio_handoff(args),
+            )
         state.last_trigger_at = time.monotonic()
         start = index + len(trigger)
 
@@ -388,30 +459,20 @@ def passthrough(
             if recording_state.active():
                 if transcription_config is None:
                     raise RuntimeError("STT transcription config is not configured")
-                audio_file, elapsed, started_at = stop_recording(
+                recorded_audio = stop_recording_result(
                     state=recording_state,
                     status=status,
                 )
-                save_run_artifacts(
+                save_and_cleanup_recorded_audio(
+                    args=args,
                     repo_root=repo_root,
-                    save_run=args.save_run,
-                    keep_audio=args.keep_audio,
-                    run_output_dir=args.run_output_dir,
-                    audio_file=audio_file,
+                    child_command=child_command,
+                    recorded_audio=recorded_audio,
                     transcript="",
-                    started_at=started_at,
-                    elapsed=elapsed,
                     injected=False,
                     outcome="interrupted_recording",
-                    error=None,
-                    stt=transcription_metadata(transcription_config),
-                    child_command=child_command,
-                    child_cwd=args.cwd,
-                    status=status,
-                )
-                cleanup_audio(
-                    keep_audio=args.keep_audio,
-                    audio_file=audio_file,
+                    error_message=None,
+                    transcription_config=transcription_config,
                     status=status,
                 )
         finally:

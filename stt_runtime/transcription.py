@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import json
 import subprocess
 import threading
@@ -24,7 +25,19 @@ class TranscriptionConfig:
 
 @dataclass(frozen=True)
 class TranscriptionRequest:
-    audio_file: Path
+    audio_file: Path | None = None
+    audio_bytes: bytes | None = None
+    audio_format: str = "wav"
+
+    def __post_init__(self) -> None:
+        has_file = self.audio_file is not None
+        has_buffer = self.audio_bytes is not None
+        if has_file == has_buffer:
+            raise ValueError("exactly one of audio_file or audio_bytes is required")
+        if self.audio_bytes is not None and not self.audio_bytes:
+            raise ValueError("audio_bytes must not be empty")
+        if not self.audio_format:
+            raise ValueError("audio_format must not be empty")
 
 
 @dataclass(frozen=True)
@@ -128,6 +141,8 @@ class SubprocessTranscriptionClient:
         return None
 
     def _build_command(self, request: TranscriptionRequest) -> list[str]:
+        if request.audio_file is None:
+            raise RuntimeError("subprocess transcription requires an audio file")
         command = [
             str(self._repo_root / "scripts/transcribe.sh"),
             str(request.audio_file),
@@ -142,7 +157,7 @@ class SubprocessTranscriptionClient:
             "--beam-size",
             str(self._config.beam_size),
         ]
-        if self._config.initial_prompt:
+        if self._config.initial_prompt is not None:
             command.extend(["--initial-prompt", self._config.initial_prompt])
         if not self._config.vad_filter:
             command.append("--no-vad-filter")
@@ -173,10 +188,7 @@ class PersistentWorkerTranscriptionClient:
 
         self._status("transcribing...")
         stderr_start = len(self._stderr_lines)
-        payload = json.dumps(
-            {"audio_file": str(request.audio_file)},
-            ensure_ascii=False,
-        )
+        payload = json.dumps(self._request_payload(request), ensure_ascii=False)
         try:
             process.stdin.write(payload + "\n")
             process.stdin.flush()
@@ -303,11 +315,21 @@ class PersistentWorkerTranscriptionClient:
             "--beam-size",
             str(self._config.beam_size),
         ]
-        if self._config.initial_prompt:
+        if self._config.initial_prompt is not None:
             command.extend(["--initial-prompt", self._config.initial_prompt])
         if not self._config.vad_filter:
             command.append("--no-vad-filter")
         return command
+
+    def _request_payload(self, request: TranscriptionRequest) -> dict[str, str]:
+        if request.audio_bytes is not None:
+            return {
+                "audio_bytes_b64": base64.b64encode(request.audio_bytes).decode("ascii"),
+                "audio_format": request.audio_format,
+            }
+        if request.audio_file is None:
+            raise RuntimeError("worker transcription requires audio input")
+        return {"audio_file": str(request.audio_file)}
 
 
 def transcribe_audio(
