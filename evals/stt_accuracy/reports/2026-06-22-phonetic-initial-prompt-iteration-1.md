@@ -10,14 +10,15 @@
 이번 iteration은 특정 개발 token 예시를 제거하고, 한글 음가 출력 원칙만 일반화해서
 검증했다.
 
-결론: 일반화 prompt도 목표 달성치에는 도달하지 못했다. P3가 best run이며
-`average_normalized_char_error_rate` 하한은 충족했지만, failed count는 20으로
-baseline보다 1건 악화되었다. Latin hallucination은 13에서 11로 줄었으나
+결론: P3를 현행 best available prompt로 채택한다. 목표 달성치에는 도달하지 못했고
+failed count는 20으로 baseline보다 1건 악화되었지만, `average_case_score`,
+`average_normalized_char_error_rate`, Latin hallucination은 baseline보다 개선되었다.
+P3의 `average_normalized_char_error_rate`는 하한도 충족했다. 다만
 `manifest local json schema validation command`, `run id from timestamp`,
 `Codex-Command-Accuracy-V1` 같은 발화에서 literal 복원이 계속 발생했다.
 
-따라서 다음 방향은 더 긴 prompt matrix가 아니라 v1 한글 음가 정규화 또는
-phrase-level 발음 치환 전략을 별도 leaf로 검증하는 것이다.
+따라서 다음 방향은 prompt를 더 늘리는 것이 아니라 P3를 고정한 뒤 v1 한글 음가
+정규화 또는 phrase-level 발음 치환 전략을 별도 leaf로 검증하는 것이다.
 
 ## Baseline
 
@@ -147,10 +148,11 @@ Git-tracked report에는 raw transcript 전문을 복사하지 않는다.
 
 최종 판정:
 
-- 목표 미달.
-- 일부 하한은 충족했지만 failed count와 `korean_command`가 악화.
-- 일반화 prompt만으로는 v1 한글 음가 contract를 만족시키기 어렵다.
-- 다음 leaf는 prompt 확장이 아니라 v1 한글 음가 정규화 또는 phrase-level 발음 치환 실험으로 분리한다.
+- P3를 현행 best available prompt로 채택한다.
+- P3는 목표 달성치에는 미달했고 failed count와 `korean_command`가 악화되었다.
+- 그러나 P3는 baseline보다 `average_case_score`, `average_normalized_char_error_rate`, hallucination이 개선되었다.
+- pass/fail 기준은 strict normalized match라 개선 폭을 충분히 반영하지 못한다.
+- 다음 leaf는 prompt 확장이 아니라 P3 고정 후 v1 한글 음가 정규화 또는 phrase-level 발음 치환 실험으로 분리한다.
 
 ## Verification
 
@@ -177,6 +179,6 @@ Notes:
 
 추천:
 
-1. v1 한글 음가 정규화 후보를 별도 leaf로 설계한다.
+1. P3 prompt를 현행 best available prompt로 고정한다.
 2. `manifest local json schema validation command` 같은 phrase-level English output을 한글 음가 expected와 비교 가능한 형태로 변환한다.
 3. `run_id`, `CMD`, `Codex-Command-Accuracy-V1` 계열은 v2 literal 복원으로 넘기지 말고, v1에서는 먼저 음가 정규화 가능성을 확인한다.
