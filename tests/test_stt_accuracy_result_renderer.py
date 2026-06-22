@@ -121,7 +121,7 @@ class SttAccuracyResultRendererTest(unittest.TestCase):
             markdown,
         )
         self.assertIn(
-            "| latin_token_loss | expected의 Latin-script token 보존 실패. |",
+            "| latin_token_loss | expected의 Latin-script token 보존 실패. v1 한글 음가 suite에서는 통과 기준이 아니라 v2 literal 복원 참고 지표다. |",
             markdown,
         )
 
