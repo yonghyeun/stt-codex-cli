@@ -2,7 +2,7 @@
 
 Codex CLI 입력 보조 목적의 STT 정확도 평가 트랙.
 
-이 문서가 `#9` 정확도 개선 트랙의 STT accuracy architecture contract다.
+이 문서가 STT accuracy evaluation architecture contract다.
 
 ## Goal
 
@@ -64,9 +64,8 @@ evals/
 - `suites/README.md`: suite와 manifest 공통 계약.
 - `suites/codex-command-accuracy-v1/README.md`: 첫 active suite 계약.
 - `reports/`: 결정, baseline, closeout 요약.
-- GitHub issue: 작업 순서와 진행 상태.
 
-issue comment는 결정 로그와 handoff다. 오래 유지되는 contract는 repo 문서에 반영한다.
+이 문서는 local file state만으로 읽혀야 한다. 작업 순서, 리뷰 상태, 외부 전달 상태 같은 진행 정보는 이 계약의 입력값이 아니다.
 
 ## Ownership Rules
 
@@ -94,7 +93,7 @@ evals/stt_accuracy/suites/codex-command-accuracy-v1/
 
 ## Baseline Harness Contract
 
-Phase 2 baseline 실행은 하네스 계약을 먼저 따른다.
+Baseline 실행은 하네스 계약을 먼저 따른다.
 
 Canonical dry-run:
 

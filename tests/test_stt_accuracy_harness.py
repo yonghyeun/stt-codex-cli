@@ -1,11 +1,15 @@
 from __future__ import annotations
 
 import json
+import re
 import tempfile
 import unittest
 from pathlib import Path
 
 from scripts import run_stt_accuracy_suite
+
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
 
 
 class SttAccuracyHarnessTest(unittest.TestCase):
@@ -173,6 +177,39 @@ class SttAccuracyHarnessTest(unittest.TestCase):
         self.assertIn("cli_option_loss", result["failure_types"])
         self.assertIn("latin_token_loss", result["failure_types"])
         self.assertTrue(result["metrics"]["insertion_safe"]["passed"])
+
+    def test_local_eval_contract_docs_do_not_depend_on_remote_workflow_terms(self) -> None:
+        docs = [
+            REPO_ROOT / "evals" / "README.md",
+            REPO_ROOT / "evals" / "inputs" / "speech" / "v1" / "manifest.json",
+            REPO_ROOT / "evals" / "stt_accuracy" / "README.md",
+            REPO_ROOT / "evals" / "stt_accuracy" / "reports" / "README.md",
+            REPO_ROOT / "evals" / "stt_accuracy" / "reports" / "2026-06-21-governance.md",
+            REPO_ROOT
+            / "evals"
+            / "stt_accuracy"
+            / "reports"
+            / "2026-06-21-corpus-collection.md",
+            REPO_ROOT
+            / "evals"
+            / "stt_accuracy"
+            / "suites"
+            / "codex-command-accuracy-v1"
+            / "README.md",
+        ]
+        forbidden = re.compile(
+            r"(Phase\s*\d|phase|leaf|#\d+|GitHub issue|issue graph|remote|handoff)",
+            re.IGNORECASE,
+        )
+
+        violations: list[str] = []
+        for doc in docs:
+            text = doc.read_text(encoding="utf-8")
+            for line_number, line in enumerate(text.splitlines(), start=1):
+                if forbidden.search(line):
+                    violations.append(f"{doc.relative_to(REPO_ROOT)}:{line_number}: {line}")
+
+        self.assertEqual([], violations)
 
 
 if __name__ == "__main__":

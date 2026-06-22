@@ -1,6 +1,6 @@
 # codex-command-accuracy-v1
 
-`#9` 정확도 개선 트랙의 첫 active baseline suite.
+Codex 명령형 발화 정확도 평가의 첫 active baseline suite.
 
 ## Goal
 

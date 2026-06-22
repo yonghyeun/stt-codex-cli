@@ -2,11 +2,9 @@
 
 ## Context
 
-이 문서는 `#9` STT 정확도 개선 트랙의 Phase 0 결정 기록이다.
+이 문서는 STT accuracy evaluation governance 결정 기록이다.
 
-Phase 0는 정확도를 직접 올리는 단계가 아니다. 정확도 실험을 어디에 기록하고, 어떤 artifact를 남기며, 어떤 기준으로 성공을 판단할지 먼저 닫는 단계다.
-
-`#13`에서 Phase 0의 initial output tree 결정은 공유 input architecture로 재정렬됐다.
+정확도 실험을 어디에 기록하고, 어떤 artifact를 남기며, 어떤 기준으로 성공을 판단할지 local contract로 닫는다.
 
 ## Architecture Decision
 
@@ -67,7 +65,6 @@ evals/
 - `evals/stt_accuracy/suites/codex-command-accuracy-v1/README.md`: 첫 active suite contract.
 - `evals/stt_accuracy/reports/`: local evidence와 결정 요약.
 - `fixtures/README.md`: legacy/reference fixture 경계.
-- GitHub issue: 진행 상태, sequencing, handoff projection.
 
 ## Artifact Ownership
 
@@ -123,8 +120,8 @@ evals/
 - suite는 sample을 어떻게 참조하는가.
 - run artifact는 어디에 보존되는가.
 
-## Remote Projection Boundary
+## Local Self-Containment Boundary
 
-이 report는 다음 작업 queue를 소유하지 않는다.
+이 report는 작업 queue를 소유하지 않는다.
 
-다음 phase, leaf 순서, handoff, closeout receipt는 GitHub issue graph와 issue comment가 소유한다. local 문서는 remote 상태 없이도 eval architecture를 이해할 수 있어야 한다.
+local 문서는 외부 진행 상태 없이도 eval architecture를 이해할 수 있어야 한다. report는 실행 evidence, 결정 근거, artifact ownership만 소유한다.
