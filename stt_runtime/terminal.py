@@ -14,6 +14,7 @@ from stt_core.status import compact_parent_status
 
 PARENT_PREFIX = "[stt-parent]"
 TerminalSizeFn = Callable[[], tuple[int, int]]
+ParentPanel = tuple[str, ...]
 
 
 class TerminalMode:
@@ -82,6 +83,7 @@ class TerminalStatusRenderer:
         interactive: bool | None = None,
         terminal_size: TerminalSizeFn = current_terminal_size,
         prefix: str = PARENT_PREFIX,
+        parent_panel: ParentPanel = (),
     ) -> None:
         self.stream = stream
         self.enabled = enabled
@@ -90,9 +92,11 @@ class TerminalStatusRenderer:
         self.interactive = stream.isatty() if interactive is None else interactive
         self.terminal_size = terminal_size
         self.prefix = prefix
-        self.reserved_rows = (
-            1 if self.enabled and self.interactive and not self.debug else 0
-        )
+        self.parent_panel = tuple(parent_panel)
+        if self.enabled and self.interactive and not self.debug:
+            self.reserved_rows = len(self.parent_panel) + 1
+        else:
+            self.reserved_rows = 0
 
     def __call__(self, message: str) -> None:
         if not self.enabled:
@@ -104,6 +108,30 @@ class TerminalStatusRenderer:
         if compact is None:
             return
         self.set_status(compact.text)
+
+    def render_parent_panel(self) -> None:
+        if (
+            not self.enabled
+            or self.debug
+            or not self.interactive
+            or not self.parent_panel
+        ):
+            return
+        try:
+            rows, columns = self.terminal_size()
+        except OSError:
+            return
+        rows = max(1, rows)
+        visible_panel_rows = min(len(self.parent_panel), max(0, rows - 2))
+        if visible_panel_rows == 0:
+            self.stream.write("\033[1;1H")
+            self.stream.flush()
+            return
+        for offset, line in enumerate(self.parent_panel[:visible_panel_rows], start=1):
+            display = self._truncate(line, columns)
+            self.stream.write(f"\033[{offset};1H\033[2K{display}")
+        self.stream.write(f"\033[{visible_panel_rows + 1};1H")
+        self.stream.flush()
 
     def set_status(self, text: str) -> None:
         if not self.enabled:
