@@ -132,6 +132,42 @@ class PttReleaseGapContractTest(unittest.TestCase):
         self.assertEqual(args.release_gap, 0.2)
 
 
+class RuntimeDefaultContractTest(unittest.TestCase):
+    def parse_with(
+        self,
+        argv: list[str] | None = None,
+        env: dict[str, str] | None = None,
+    ) -> argparse.Namespace:
+        with (
+            patch.object(sys, "argv", ["stt_codex.py", *(argv or [])]),
+            patch.dict(os.environ, env or {}, clear=True),
+        ):
+            return stt_codex.parse_args()
+
+    def test_default_runtime_uses_worker_and_buffer_handoff(self) -> None:
+        args = self.parse_with()
+
+        self.assertEqual(args.stt_backend, "worker")
+        self.assertEqual(args.audio_handoff, "auto")
+        self.assertEqual(stt_codex.resolve_audio_handoff(args), "buffer")
+
+    def test_save_or_debug_audio_preserves_file_handoff(self) -> None:
+        self.assertEqual(
+            stt_codex.resolve_audio_handoff(self.parse_with(["--save-run"])),
+            "file",
+        )
+        self.assertEqual(
+            stt_codex.resolve_audio_handoff(self.parse_with(["--keep-audio"])),
+            "file",
+        )
+
+    def test_subprocess_override_uses_file_handoff(self) -> None:
+        args = self.parse_with(["--stt-backend", "subprocess"])
+
+        self.assertEqual(args.stt_backend, "subprocess")
+        self.assertEqual(stt_codex.resolve_audio_handoff(args), "file")
+
+
 class RunArtifactTest(unittest.TestCase):
     def test_save_run_disabled_writes_nothing(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

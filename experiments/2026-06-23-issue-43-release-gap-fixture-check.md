@@ -3,14 +3,16 @@
 ## Scope
 
 - Issue: `#43`.
-- Change under review: PTT `accuracy/speed` profile 제거, default `release_gap=0.35s`, dynamic override는 `--release-gap` / `STT_PTT_RELEASE_GAP`.
+- Change under review: PTT `accuracy/speed` profile 제거, default `release_gap=0.35s`, default `stt_backend=worker`, default `audio_handoff=auto`.
+- Runtime default: 저장/debug option이 꺼진 기본 실행은 worker backend에서 buffer handoff를 사용한다.
 - Fixture purpose: PR review에 expected text와 transcribed text를 함께 남기기 위한 전체 legacy fixture 재측정.
 
 ## Boundary
 
 - `release_gap`은 live PTT stop timing option이다.
-- 아래 fixture는 이미 녹음된 WAV를 전사하므로 `release_gap` 값이 transcription result에 직접 영향을 주지 않는다.
-- 이 check는 profile 제거가 fixed WAV STT 경로를 건드리지 않았다는 PR evidence다.
+- `worker`/`buffer` 기본값은 wrapper runtime request path option이다.
+- 아래 fixture는 이미 녹음된 WAV를 `run_fixture_suite.py`로 전사하므로 live PTT stop timing과 wrapper handoff path를 직접 측정하지 않는다.
+- 이 check는 default runtime 계약 변경이 fixed WAV STT 품질을 바꾸지 않았다는 PR evidence다.
 - Legacy fixture는 `#9` STT accuracy active baseline이 아니다.
 
 ## Commands
@@ -72,5 +74,6 @@ LD_LIBRARY_PATH=/home/yonghyeun/stt-codex-cli/.venv/lib/python3.12/site-packages
 
 - KSS 한국어 fixture는 normalized 기준 유지.
 - HiKE 한영 혼합 fixture는 여전히 Latin token이 한글 음차로 바뀌는 문제가 있다.
-- 이 문제는 `release_gap` runtime setting과 별개다.
+- 이 문제는 `release_gap`과 wrapper handoff runtime setting과 별개다.
 - `release_gap=0.35s` 기본 변경은 live PTT truncation risk를 가질 수 있으나 fixed WAV fixture에서는 측정되지 않는다.
+- 기본 worker+buffer runtime은 wrapper request latency path를 바꾸지만 이 fixed WAV suite에서는 직접 측정되지 않는다.
