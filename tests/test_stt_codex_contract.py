@@ -155,11 +155,17 @@ class RuntimeDefaultContractTest(unittest.TestCase):
         ):
             return stt_codex.parse_args()
 
-    def test_default_runtime_uses_worker_and_buffer_handoff(self) -> None:
+    def test_default_runtime_uses_daemon_and_buffer_handoff(self) -> None:
         args = self.parse_with()
 
-        self.assertEqual(args.stt_backend, "worker")
+        self.assertEqual(args.stt_backend, "daemon")
         self.assertEqual(args.audio_handoff, "auto")
+        self.assertEqual(stt_codex.resolve_audio_handoff(args), "buffer")
+
+    def test_worker_override_uses_buffer_handoff(self) -> None:
+        args = self.parse_with(["--stt-backend", "worker"])
+
+        self.assertEqual(args.stt_backend, "worker")
         self.assertEqual(stt_codex.resolve_audio_handoff(args), "buffer")
 
     def test_save_or_debug_audio_preserves_file_handoff(self) -> None:

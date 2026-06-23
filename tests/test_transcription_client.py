@@ -850,7 +850,7 @@ class DaemonTranscriptionClientTest(unittest.TestCase):
 
 
 class TranscriptionClientFactoryTest(unittest.TestCase):
-    def test_default_backend_falls_back_to_subprocess(self) -> None:
+    def test_missing_backend_arg_falls_back_to_subprocess(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             config = TranscriptionConfig(
                 model="tiny",

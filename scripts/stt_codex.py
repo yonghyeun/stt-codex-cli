@@ -48,7 +48,7 @@ DEFAULT_RELEASE_GAP = 0.35
 DEFAULT_MAX_DURATION = 60.0
 DEFAULT_MIN_DURATION = 0.15
 DEFAULT_RUN_OUTPUT_DIR = "output/runs"
-DEFAULT_STT_BACKEND = "worker"
+DEFAULT_STT_BACKEND = "daemon"
 DEFAULT_AUDIO_HANDOFF = "auto"
 DEFAULT_STT_INITIAL_PROMPT = DEFAULT_KOREAN_PHONETIC_INITIAL_PROMPT
 DEFAULT_STT_DAEMON_IDLE_TIMEOUT = 600.0
@@ -250,7 +250,7 @@ def parse_args() -> argparse.Namespace:
         default=os.environ.get("STT_AUDIO_HANDOFF", DEFAULT_AUDIO_HANDOFF),
         help=(
             "Audio handoff path for STT mode. "
-            "auto uses buffer only with worker backend and no save/debug audio options. "
+            "auto uses buffer only with daemon/worker backend and no save/debug audio options. "
             f"Default: {DEFAULT_AUDIO_HANDOFF}"
         ),
     )
