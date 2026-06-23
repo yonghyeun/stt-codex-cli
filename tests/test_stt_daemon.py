@@ -224,6 +224,70 @@ class SttDaemonTest(unittest.TestCase):
                 any(float(response["queue_wait_seconds"]) > 0 for response in responses)
             )
 
+    def test_idle_timeout_does_not_stop_daemon_during_active_request(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            socket_path = root / "stt.sock"
+            audio = root / "audio.wav"
+            audio.write_bytes(b"fake wav")
+            model_factory = FakeDaemonModelFactory(
+                ["slow transcript"],
+                delay_seconds=2.5,
+            )
+            stop_event = threading.Event()
+            server = threading.Thread(
+                target=stt_daemon.serve_daemon,
+                kwargs={
+                    "config": stt_daemon.DaemonConfig(
+                        model="large-v3",
+                        device="cpu",
+                        compute_type="int8",
+                        model_dir=None,
+                        config_id="large-v3-cpu-int8",
+                    ),
+                    "socket_path": socket_path,
+                    "idle_timeout_seconds": 0.02,
+                    "model_factory": model_factory,
+                    "stop_event": stop_event,
+                },
+                daemon=True,
+            )
+            server.start()
+            wait_for_socket(socket_path)
+
+            response_holder: list[dict[str, object]] = []
+
+            def send_request() -> None:
+                response_holder.append(
+                    stt_daemon.request_daemon(
+                        socket_path,
+                        {
+                            "config_id": "large-v3-cpu-int8",
+                            "audio_file": str(audio),
+                            "language": "ko",
+                            "beam_size": 5,
+                            "initial_prompt": None,
+                            "vad_filter": True,
+                        },
+                        timeout_seconds=5.0,
+                    )
+                )
+
+            client = threading.Thread(target=send_request)
+            try:
+                client.start()
+                time.sleep(2.2)
+                self.assertTrue(socket_path.exists())
+                client.join(timeout=5.0)
+            finally:
+                stop_event.set()
+                server.join(timeout=2.0)
+
+            self.assertEqual(len(response_holder), 1)
+            response = response_holder[0]
+            self.assertTrue(response["ok"])
+            self.assertEqual(response["transcript"], "slow transcript")
+
 
 if __name__ == "__main__":
     unittest.main()

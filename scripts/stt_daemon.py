@@ -7,6 +7,7 @@ import socket
 import sys
 import threading
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
@@ -220,7 +221,28 @@ def serve_daemon(
     _prepare_socket_path(socket_path)
 
     threads: list[threading.Thread] = []
+    activity_lock = threading.Lock()
     last_activity = time.monotonic()
+    active_connections = 0
+
+    def mark_connection_started() -> None:
+        nonlocal active_connections, last_activity
+        with activity_lock:
+            active_connections += 1
+            last_activity = time.monotonic()
+
+    def mark_connection_done() -> None:
+        nonlocal active_connections, last_activity
+        with activity_lock:
+            active_connections -= 1
+            last_activity = time.monotonic()
+
+    def idle_timeout_reached() -> bool:
+        with activity_lock:
+            if active_connections > 0:
+                return False
+            return time.monotonic() - last_activity >= idle_timeout_seconds
+
     with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as server:
         server.bind(str(socket_path))
         server.listen()
@@ -229,18 +251,17 @@ def serve_daemon(
             while not stop_event.is_set():
                 if (
                     idle_timeout_seconds is not None
-                    and time.monotonic() - last_activity >= idle_timeout_seconds
+                    and idle_timeout_reached()
                 ):
                     break
                 try:
                     connection, _ = server.accept()
                 except socket.timeout:
                     continue
-                last_activity = time.monotonic()
+                mark_connection_started()
                 thread = threading.Thread(
                     target=_handle_connection,
-                    args=(connection, daemon),
-                    daemon=True,
+                    args=(connection, daemon, mark_connection_done),
                 )
                 thread.start()
                 threads.append(thread)
@@ -265,17 +286,22 @@ def _prepare_socket_path(socket_path: Path) -> None:
 def _handle_connection(
     connection: socket.socket,
     daemon: TranscriptionDaemon,
+    on_done: Callable[[], None] | None = None,
 ) -> None:
-    with connection:
-        try:
-            line = _readline(connection)
-            request = json.loads(line)
-            if not isinstance(request, dict):
-                raise ValueError("request must be a JSON object")
-            response = daemon.handle_request(request)
-        except Exception as error:
-            response = {"ok": False, "error": str(error), "config_id": daemon.config_id}
-        connection.sendall(json.dumps(response, ensure_ascii=False).encode() + b"\n")
+    try:
+        with connection:
+            try:
+                line = _readline(connection)
+                request = json.loads(line)
+                if not isinstance(request, dict):
+                    raise ValueError("request must be a JSON object")
+                response = daemon.handle_request(request)
+            except Exception as error:
+                response = {"ok": False, "error": str(error), "config_id": daemon.config_id}
+            connection.sendall(json.dumps(response, ensure_ascii=False).encode() + b"\n")
+    finally:
+        if on_done is not None:
+            on_done()
 
 
 def _readline(connection: socket.socket) -> str:
