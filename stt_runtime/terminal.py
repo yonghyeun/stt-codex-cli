@@ -131,6 +131,7 @@ class TerminalStatusRenderer:
             self.stream.write(f"{text}\n")
             self.stream.flush()
             return
+        rows = max(1, rows)
         display = self._truncate(text, columns)
         self.stream.write(f"\033[s\033[{rows};1H\033[2K{display}\033[u")
         self.stream.flush()

@@ -85,6 +85,24 @@ class TerminalStatusRendererTest(unittest.TestCase):
             "\033[s\033[24;1H\033[2KSTT recording | Ctrl+T stop\033[u",
         )
 
+    def test_interactive_renderer_clamps_zero_sized_terminal_rows(self) -> None:
+        stream = StringIO()
+        renderer = TerminalStatusRenderer(
+            stream=stream,
+            enabled=True,
+            color=False,
+            debug=False,
+            interactive=True,
+            terminal_size=lambda: (0, 0),
+        )
+
+        renderer("recording started: in-memory audio buffer")
+
+        self.assertEqual(
+            stream.getvalue(),
+            "\033[s\033[1;1H\033[2KSTT recording | Ctrl+T stop\033[u",
+        )
+
     def test_default_renderer_hides_verbose_status_noise(self) -> None:
         stream = StringIO()
         renderer = TerminalStatusRenderer(
