@@ -43,6 +43,7 @@ DEFAULT_INJECT_MODE = "stt"
 DEFAULT_FIXED_INJECT_KEY = "ctrl+t"
 DEFAULT_STT_INJECT_KEY = "ctrl+t"
 DEFAULT_INJECT_TEXT = "hello from stt wrapper"
+DEFAULT_TRIGGER_MODE = "tap"
 DEFAULT_RELEASE_GAP = 0.35
 DEFAULT_MAX_DURATION = 60.0
 DEFAULT_MIN_DURATION = 0.15
@@ -109,11 +110,22 @@ def parse_args() -> argparse.Namespace:
         help="Pass all stdin through without reserving an injection key.",
     )
     parser.add_argument(
+        "--trigger-mode",
+        choices=("tap", "hold"),
+        default=os.environ.get("STT_TRIGGER_MODE", DEFAULT_TRIGGER_MODE),
+        help=(
+            "STT trigger behavior. tap starts recording on first trigger and stops "
+            "on the next trigger; hold preserves legacy repeated-trigger PTT. "
+            f"Default: {DEFAULT_TRIGGER_MODE}. Env: STT_TRIGGER_MODE"
+        ),
+    )
+    parser.add_argument(
         "--release-gap",
         type=positive_float,
         default=None,
         help=(
-            "Seconds without repeated trigger input before STT recording stops. "
+            "Legacy hold trigger mode only: seconds without repeated trigger input "
+            "before STT recording stops. "
             f"Default: {DEFAULT_RELEASE_GAP:g}s. Env: STT_PTT_RELEASE_GAP"
         ),
     )
@@ -370,10 +382,16 @@ def parent_banner(args: argparse.Namespace, argv: list[str], cwd: str | None) ->
                 f"inject key: {args.inject_key} -> {len(args.inject_text)} chars; Enter still manual",
             )
         else:
-            parent_status(
-                args,
-                f"ptt key: {args.inject_key}; release gap {args.release_gap:g}s; Enter still manual",
-            )
+            if args.trigger_mode == "hold":
+                parent_status(
+                    args,
+                    f"trigger key: {args.inject_key} hold/repeat; release gap {args.release_gap:g}s; Enter still manual",
+                )
+            else:
+                parent_status(
+                    args,
+                    f"trigger key: {args.inject_key} tap starts/stops recording; Enter still manual",
+                )
             parent_status(args, f"stt backend: {args.stt_backend}")
             parent_status(
                 args,
@@ -403,7 +421,9 @@ def initial_parent_status(args: argparse.Namespace) -> str:
         return "STT passthrough | inject key disabled"
     if args.inject_mode == "fixed-text":
         return f"STT fixed-text | {args.inject_key} inserts {len(args.inject_text)} chars"
-    return f"STT idle | {args.inject_key} record"
+    if args.trigger_mode == "hold":
+        return f"STT idle | hold {args.inject_key} to record"
+    return f"STT idle | {args.inject_key} start"
 
 
 def main() -> int:
