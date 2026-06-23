@@ -187,6 +187,10 @@ scripts/install_codex_stt_command.sh
 codex-stt
 ```
 
+`codex-stt`는 repo root를 launcher 위치로만 사용한다. Codex child PTY의 기본 cwd는
+`codex-stt`를 실행한 terminal의 현재 directory다. 다른 cwd가 필요하면 `--cwd`를
+명시한다.
+
 `codex-stt` launcher의 기본 repo root는 `${HOME}/stt-codex-cli`다.
 다른 위치에서 실행해야 하면 `CODEX_STT_ROOT`로 repo root를 지정한다.
 

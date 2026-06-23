@@ -66,6 +66,10 @@ codex-stt --stt-model large-v3 --stt-device cuda --stt-compute-type float16
 codex-stt --stt-backend subprocess
 ```
 
+`codex-stt` launcher는 wrapper repo root를 찾아 entrypoint만 실행하고, child Codex
+cwd는 `codex-stt`를 호출한 terminal의 현재 directory를 기본값으로 유지한다.
+다른 cwd가 필요하면 wrapper option인 `--cwd`를 명시한다.
+
 기본 실행은 terminal 최상단에 parent terminal 식별용 ASCII panel을 그리고, 하단
 1줄에는 STT 상태만 표시한다. `recording`, `transcribing`, `inserted`, `empty`,
 `failed` 같은 사용자-facing 상태만 표시하고 반복 parent 로그는 숨긴다. 상단 panel이

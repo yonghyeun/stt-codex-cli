@@ -68,6 +68,11 @@ launcher_content="$(
 set -euo pipefail
 
 repo_root="\${CODEX_STT_ROOT:-${root}}"
+if ! repo_root="\$(cd "\${repo_root}" && pwd -P)"; then
+  echo "codex-stt: STT repo root not found: \${repo_root}" >&2
+  echo "codex-stt: set CODEX_STT_ROOT to the stt-codex-cli repo root if needed" >&2
+  exit 1
+fi
 entrypoint="\${repo_root}/scripts/stt_codex.py"
 
 if [[ ! -x "\${entrypoint}" ]]; then
@@ -76,7 +81,6 @@ if [[ ! -x "\${entrypoint}" ]]; then
   exit 1
 fi
 
-cd "\${repo_root}"
 exec "\${entrypoint}" "\$@"
 EOF
 )"
