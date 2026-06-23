@@ -53,7 +53,35 @@ DEFAULT_AUDIO_HANDOFF = "auto"
 DEFAULT_STT_INITIAL_PROMPT = DEFAULT_KOREAN_PHONETIC_INITIAL_PROMPT
 DEFAULT_STT_DAEMON_IDLE_TIMEOUT = 600.0
 DEFAULT_STT_DAEMON_START_TIMEOUT = 30.0
+DEFAULT_PARENT_PANEL = "ascii"
+PARENT_PANEL_CHOICES = ("ascii", "none")
 PARENT_PREFIX = "[stt-parent]"
+PARENT_ASCII_PANEL = tuple(
+    r"""
+                 ;i.
+                  M$L                    .;i.
+                  M$Y;                .;iii;;.
+                 ;$YY$i._           .iiii;;;;;
+                .iiiYYYYYYiiiii;;;;i;iii;; ;;;
+              .;iYYYYYYiiiiiiYYYiiiiiii;;  ;;;
+           .YYYY$$$$YYYYYYYYYYYYYYYYiii;; ;;;;
+         .YYY$$$$$$YYYYYY$$$$iiiY$$$$$$$ii;;;;
+        :YYYF`,  TYYYYY$$$$$YYYYYYYi$$$$$iiiii;
+        Y$MM: \  :YYYY$$P"````"T$YYMMMMMMMMiiYY.
+     `.;$$M$$b.,dYY$$Yi; .(     .YYMMM$$$MMMMYY
+   .._$MMMMM$!YYYYYYYYYi;.`"  .;iiMMM$MMMMMMMYY
+    ._$MMMP` ```""4$$$$$iiiiiiii$MMMMMMMMMMMMMY;
+     MMMM$:       :$$$$$$$MMMMMMMMMMM$$MMMMMMMYYL
+    :MMMM$$.    .;PPb$$$$MMMMMMMMMM$$$$MMMMMMiYYU:
+     iMM$$;;: ;;;;i$$$$$$$MMMMM$$$$MMMMMMMMMMYYYYY
+     `$$$$i .. ``:iiii!*"``.$$$$$$$$$MMMMMMM$YiYYY
+      :Y$$iii;;;.. ` ..;;i$$$$$$$$$MMMMMM$$YYYYiYY:
+       :$$$$$iiiiiii$$$$$$$$$$$MMMMMMMMMMYYYYiiYYYY.
+        `$$$$$$$$$$$$$$$$$$$$MMMMMMMM$YYYYYiiiYYYYYY
+         YY$$$$$$$$$$$$$$$$MMMMMMM$$YYYiiiiiiYYYYYYY
+        :YYYYYY$$$$$$$$$$$$$$$$$$YYYYYYYiiiiYYYYYYi' cmang
+""".strip("\n").splitlines()
+)
 
 
 def parse_args() -> argparse.Namespace:
@@ -84,6 +112,15 @@ def parse_args() -> argparse.Namespace:
         "--debug-stt",
         action="store_true",
         help="Show raw parent/STT diagnostic lines instead of the compact status bar.",
+    )
+    parser.add_argument(
+        "--parent-panel",
+        choices=PARENT_PANEL_CHOICES,
+        default=os.environ.get("STT_PARENT_PANEL", DEFAULT_PARENT_PANEL),
+        help=(
+            "Parent terminal top panel. Use 'none' to disable it. "
+            f"Default: {DEFAULT_PARENT_PANEL}. Env: STT_PARENT_PANEL"
+        ),
     )
     parser.add_argument(
         "--codex-alt-screen",
@@ -255,6 +292,10 @@ def parse_args() -> argparse.Namespace:
         help="Arguments after -- are passed to the child command.",
     )
     args = parser.parse_args()
+    if args.parent_panel not in PARENT_PANEL_CHOICES:
+        parser.error(
+            "--parent-panel must be one of: " + ", ".join(PARENT_PANEL_CHOICES)
+        )
     if args.cmd_args and args.cmd_args[0] == "--":
         args.cmd_args = args.cmd_args[1:]
     if not args.cmd:
@@ -448,7 +489,14 @@ def create_parent_status_renderer(args: argparse.Namespace) -> TerminalStatusRen
         enabled=not args.quiet_parent,
         color=not args.no_color,
         debug=args.debug_stt,
+        parent_panel=parent_panel_lines(args),
     )
+
+
+def parent_panel_lines(args: argparse.Namespace) -> tuple[str, ...]:
+    if getattr(args, "parent_panel", DEFAULT_PARENT_PANEL) == "none":
+        return ()
+    return PARENT_ASCII_PANEL
 
 
 def initial_parent_status(args: argparse.Namespace) -> str:
@@ -468,6 +516,7 @@ def main() -> int:
         argv = child_argv(args)
         parent_status_renderer = create_parent_status_renderer(args)
         args.parent_status_renderer = parent_status_renderer
+        parent_status_renderer.render_parent_panel()
         parent_banner(args, argv, cwd)
         parent_status_renderer.set_status(initial_parent_status(args))
         pid, child_fd = spawn_child(argv, cwd)

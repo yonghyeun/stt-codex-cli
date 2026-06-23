@@ -57,8 +57,9 @@ Runtime flow:
 
 Boundary:
 
-- Parent wrapper는 기본 실행에서 terminal 하단 1줄을 STT status bar로 사용한다.
-- Child PTY window size는 status bar 1줄을 제외한 크기로 동기화한다.
+- Parent wrapper는 기본 실행에서 terminal 최상단 ASCII parent panel과 하단 1줄 STT status bar를 사용한다.
+- 기본 parent panel은 parent terminal 식별용 ASCII marker이며, `--parent-panel none`으로 끌 수 있다.
+- Child PTY window size는 parent panel과 status bar를 제외한 크기로 동기화한다.
 - Parent wrapper의 raw `[stt-parent]` diagnostic line은 `--debug-stt`에서만 출력한다.
 - Child Codex output은 변형하지 않는다.
 - 기본 Codex 실행에는 `--no-alt-screen`을 붙여 parent/child 경계가 scrollback에 남게 한다.

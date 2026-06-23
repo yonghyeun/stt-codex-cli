@@ -67,6 +67,52 @@ class TerminalStatusRendererTest(unittest.TestCase):
         self.assertEqual(adjusted_child_size(24, 80, reserved_rows=1), (23, 80))
         self.assertEqual(adjusted_child_size(1, 80, reserved_rows=1), (1, 80))
 
+    def test_interactive_renderer_reserves_parent_panel_and_status_rows(self) -> None:
+        renderer = TerminalStatusRenderer(
+            stream=StringIO(),
+            enabled=True,
+            color=False,
+            debug=False,
+            interactive=True,
+            terminal_size=lambda: (24, 40),
+            parent_panel=("parent", "panel"),
+        )
+
+        self.assertEqual(renderer.reserved_rows, 3)
+        self.assertEqual(adjusted_child_size(24, 80, reserved_rows=3), (21, 80))
+
+    def test_interactive_renderer_draws_parent_panel_at_top(self) -> None:
+        stream = StringIO()
+        renderer = TerminalStatusRenderer(
+            stream=stream,
+            enabled=True,
+            color=False,
+            debug=False,
+            interactive=True,
+            terminal_size=lambda: (24, 40),
+            parent_panel=("parent", "panel"),
+        )
+
+        renderer.render_parent_panel()
+
+        self.assertEqual(
+            stream.getvalue(),
+            "\033[s\033[1;1H\033[2Kparent\033[2;1H\033[2Kpanel\033[u",
+        )
+
+    def test_debug_renderer_does_not_reserve_parent_panel_rows(self) -> None:
+        renderer = TerminalStatusRenderer(
+            stream=StringIO(),
+            enabled=True,
+            color=False,
+            debug=True,
+            interactive=True,
+            terminal_size=lambda: (24, 40),
+            parent_panel=("parent", "panel"),
+        )
+
+        self.assertEqual(renderer.reserved_rows, 0)
+
     def test_interactive_renderer_updates_bottom_line_without_newline(self) -> None:
         stream = StringIO()
         renderer = TerminalStatusRenderer(

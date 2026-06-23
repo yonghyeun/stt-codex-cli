@@ -212,6 +212,27 @@ class ParentStatusWiringTest(unittest.TestCase):
         self.assertFalse(self.parse_with().debug_stt)
         self.assertTrue(self.parse_with(["--debug-stt"]).debug_stt)
 
+    def test_parent_panel_defaults_to_ascii_and_can_be_disabled(self) -> None:
+        self.assertEqual(self.parse_with().parent_panel, "ascii")
+        self.assertEqual(self.parse_with(["--parent-panel", "none"]).parent_panel, "none")
+
+    def test_default_parent_panel_contains_requested_ascii_marker(self) -> None:
+        args = self.parse_with()
+
+        panel = stt_codex.parent_panel_lines(args)
+
+        self.assertTrue(panel)
+        self.assertEqual(panel[0], "                 ;i.")
+        self.assertEqual(
+            panel[-1],
+            "        :YYYYYY$$$$$$$$$$$$$$$$$$YYYYYYYiiiiYYYYYYi' cmang",
+        )
+
+    def test_parent_panel_none_has_no_panel_lines(self) -> None:
+        args = self.parse_with(["--parent-panel", "none"])
+
+        self.assertEqual(stt_codex.parent_panel_lines(args), ())
+
     def test_parent_status_delegates_to_attached_renderer(self) -> None:
         calls: list[str] = []
         args = make_args()
