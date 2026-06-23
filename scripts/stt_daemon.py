@@ -50,6 +50,23 @@ class DaemonConfig:
     config_id: str
 
 
+@dataclass
+class RequestRecord:
+    sequence: int
+    request_id: str
+    state: str
+    queued_at: float
+    queued_monotonic: float
+    queue_rank_at_enqueue: int
+    started_at: float | None = None
+    started_monotonic: float | None = None
+    finished_at: float | None = None
+    finished_monotonic: float | None = None
+    client_pid: int | str = "unknown"
+    client_uid: int | str = "unknown"
+    client_gid: int | str = "unknown"
+
+
 class TranscriptionDaemon:
     def __init__(
         self,
@@ -59,7 +76,10 @@ class TranscriptionDaemon:
     ) -> None:
         self._config = config
         self._model = model
-        self._lock = threading.Lock()
+        self._condition = threading.Condition()
+        self._queued_requests: list[RequestRecord] = []
+        self._running_request: RequestRecord | None = None
+        self._next_sequence = 0
         self._model_load_count = 1
 
     @property
@@ -67,7 +87,7 @@ class TranscriptionDaemon:
         return self._config.config_id
 
     def handle_request(self, request: dict[str, object]) -> dict[str, object]:
-        received_at = time.monotonic()
+        record = self._enqueue_request(request)
         try:
             requested_config_id = request.get("config_id")
             if requested_config_id != self._config.config_id:
@@ -79,13 +99,14 @@ class TranscriptionDaemon:
             audio_input = transcribe_worker.audio_input_from_request(request)
             worker_config = request_worker_config(request, self._config)
 
-            with self._lock:
-                queue_wait_seconds = time.monotonic() - received_at
-                transcript, info, segment_count, elapsed = transcribe_worker.transcribe_audio(
-                    model=self._model,
-                    audio_source=audio_input.source,
-                    config=worker_config,
-                )
+            self._start_request(record)
+            queue_wait_seconds = self._queue_wait_seconds(record)
+            transcript, info, segment_count, elapsed = transcribe_worker.transcribe_audio(
+                model=self._model,
+                audio_source=audio_input.source,
+                config=worker_config,
+            )
+            self._finish_request(record, "done")
 
             return {
                 "ok": True,
@@ -100,9 +121,92 @@ class TranscriptionDaemon:
                 "model_load_count": self._model_load_count,
                 "queue_wait_seconds": round(queue_wait_seconds, 6),
                 "elapsed_seconds": round(elapsed, 6),
+                **request_record_metadata(record),
             }
         except Exception as error:
-            return {"ok": False, "error": str(error), "config_id": self._config.config_id}
+            self._finish_request(record, "error")
+            return {
+                "ok": False,
+                "error": str(error),
+                "config_id": self._config.config_id,
+                **request_record_metadata(record),
+            }
+
+    def _enqueue_request(self, request: dict[str, object]) -> RequestRecord:
+        with self._condition:
+            self._next_sequence += 1
+            sequence = self._next_sequence
+            record = RequestRecord(
+                sequence=sequence,
+                request_id=request_id_from_request(request, sequence),
+                state="queued",
+                queued_at=time.time(),
+                queued_monotonic=time.monotonic(),
+                queue_rank_at_enqueue=len(self._queued_requests)
+                + (1 if self._running_request is not None else 0)
+                + 1,
+            )
+            self._queued_requests.append(record)
+            self._condition.notify_all()
+            return record
+
+    def _start_request(self, record: RequestRecord) -> None:
+        with self._condition:
+            while (
+                self._running_request is not None
+                or not self._queued_requests
+                or self._queued_requests[0] is not record
+            ):
+                self._condition.wait()
+            self._queued_requests.pop(0)
+            self._running_request = record
+            record.state = "running"
+            record.started_at = time.time()
+            record.started_monotonic = time.monotonic()
+
+    def _finish_request(self, record: RequestRecord, state: str) -> None:
+        with self._condition:
+            if record in self._queued_requests:
+                self._queued_requests.remove(record)
+            if self._running_request is record:
+                self._running_request = None
+            if record.finished_at is None:
+                record.finished_at = time.time()
+                record.finished_monotonic = time.monotonic()
+            record.state = state
+            self._condition.notify_all()
+
+    @staticmethod
+    def _queue_wait_seconds(record: RequestRecord) -> float:
+        if record.started_monotonic is None:
+            return 0.0
+        return record.started_monotonic - record.queued_monotonic
+
+
+def request_id_from_request(request: dict[str, object], sequence: int) -> str:
+    request_id = request.get("request_id")
+    if request_id is None:
+        return f"req-{sequence:06d}"
+    if not isinstance(request_id, str) or not request_id.strip():
+        raise ValueError("request.request_id must be a non-empty string")
+    return request_id
+
+
+def request_record_metadata(record: RequestRecord) -> dict[str, object]:
+    metadata: dict[str, object] = {
+        "request_id": record.request_id,
+        "request_state": record.state,
+        "queue_rank_at_enqueue": record.queue_rank_at_enqueue,
+        "queued_at": round(record.queued_at, 6),
+        "client_pid": record.client_pid,
+        "client_uid": record.client_uid,
+        "client_gid": record.client_gid,
+    }
+    if record.started_at is not None:
+        metadata["started_at"] = round(record.started_at, 6)
+    if record.finished_at is not None:
+        metadata["finished_at"] = round(record.finished_at, 6)
+    return metadata
 
 
 def request_worker_config(

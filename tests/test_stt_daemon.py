@@ -128,6 +128,17 @@ class SttDaemonTest(unittest.TestCase):
             self.assertEqual(model_factory.model.calls[1][1]["language"], "en")
             self.assertEqual(model_factory.model.calls[1][1]["beam_size"], 1)
             self.assertFalse(model_factory.model.calls[1][1]["vad_filter"])
+            self.assertEqual(first["request_id"], "req-000001")
+            self.assertEqual(second["request_id"], "req-000002")
+            self.assertEqual(first["request_state"], "done")
+            self.assertEqual(second["request_state"], "done")
+            self.assertEqual(first["queue_rank_at_enqueue"], 1)
+            self.assertEqual(second["queue_rank_at_enqueue"], 1)
+            self.assertIsInstance(first["queued_at"], float)
+            self.assertIsInstance(first["started_at"], float)
+            self.assertIsInstance(first["finished_at"], float)
+            self.assertLessEqual(first["queued_at"], first["started_at"])
+            self.assertLessEqual(first["started_at"], first["finished_at"])
 
     def test_daemon_rejects_config_mismatch(self) -> None:
         model_factory = FakeDaemonModelFactory(["unused"])
@@ -197,6 +208,7 @@ class SttDaemonTest(unittest.TestCase):
                         socket_path,
                         {
                             "config_id": "large-v3-cpu-int8",
+                            "request_id": f"{audio_file.stem}-request",
                             "audio_file": str(audio_file),
                             "language": "ko",
                             "beam_size": 5,
@@ -222,6 +234,22 @@ class SttDaemonTest(unittest.TestCase):
             self.assertTrue(all(response["ok"] for response in responses))
             self.assertTrue(
                 any(float(response["queue_wait_seconds"]) > 0 for response in responses)
+            )
+            by_request_id = {
+                str(response["request_id"]): response for response in responses
+            }
+            self.assertEqual(set(by_request_id), {"first-request", "second-request"})
+            self.assertEqual(
+                by_request_id["first-request"]["queue_rank_at_enqueue"],
+                1,
+            )
+            self.assertEqual(
+                by_request_id["second-request"]["queue_rank_at_enqueue"],
+                2,
+            )
+            self.assertEqual(
+                [Path(call[0]).name for call in model_factory.model.calls],
+                ["first.wav", "second.wav"],
             )
 
     def test_idle_timeout_does_not_stop_daemon_during_active_request(self) -> None:
