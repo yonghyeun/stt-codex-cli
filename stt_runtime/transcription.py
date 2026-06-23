@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 import base64
+import hashlib
 import json
+import os
+import re
 import subprocess
 import threading
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Protocol, TextIO
 
@@ -44,6 +47,54 @@ class TranscriptionRequest:
 class TranscriptionResult:
     transcript: str
     stderr_lines: tuple[str, ...]
+    metadata: dict[str, object] = field(default_factory=dict)
+
+
+def daemon_config_id(config: TranscriptionConfig) -> str:
+    payload = {
+        "model": config.model,
+        "device": config.device,
+        "compute_type": config.compute_type,
+    }
+    encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
+    digest = hashlib.sha256(encoded).hexdigest()[:12]
+    readable = "-".join(
+        (
+            _slug_for_socket(config.model),
+            _slug_for_socket(config.device),
+            _slug_for_socket(config.compute_type),
+        )
+    )
+    return f"{readable[:80].strip('-')}-{digest}"
+
+
+def daemon_socket_path(
+    config: TranscriptionConfig,
+    *,
+    socket_dir: Path | None = None,
+) -> Path:
+    base_dir = socket_dir if socket_dir is not None else default_daemon_socket_dir()
+    return base_dir / f"{daemon_config_id(config)}.sock"
+
+
+def default_daemon_socket_dir() -> Path:
+    runtime_dir = os.environ.get("XDG_RUNTIME_DIR")
+    if runtime_dir:
+        return Path(runtime_dir) / "stt-codex-cli"
+    return Path.home() / ".cache" / "stt-codex-cli"
+
+
+def _slug_for_socket(value: str) -> str:
+    slug = re.sub(r"[^a-z0-9_.-]+", "-", value.lower()).strip("-")
+    return slug or "value"
+
+
+def _response_metadata(response: dict[str, object]) -> dict[str, object]:
+    return {
+        key: value
+        for key, value in response.items()
+        if key not in {"ok", "transcript"}
+    }
 
 
 class TranscriptionClient(Protocol):
@@ -218,6 +269,7 @@ class PersistentWorkerTranscriptionClient:
         return TranscriptionResult(
             transcript=transcript.strip(),
             stderr_lines=tuple(self._stderr_lines[stderr_start:]),
+            metadata=_response_metadata(response),
         )
 
     def close(self) -> None:

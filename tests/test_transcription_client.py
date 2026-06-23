@@ -5,6 +5,7 @@ import json
 import subprocess
 import tempfile
 import unittest
+from dataclasses import replace
 from io import StringIO
 from pathlib import Path
 from typing import Any, Sequence
@@ -17,6 +18,8 @@ from stt_runtime.transcription import (
     TranscriptionConfig,
     TranscriptionRequest,
     TranscriptionResult,
+    daemon_config_id,
+    daemon_socket_path,
     transcribe_audio,
 )
 
@@ -322,6 +325,64 @@ class SubprocessTranscriptionClientTest(unittest.TestCase):
             self.assertIn("--no-vad-filter", command)
 
 
+class DaemonConfigTest(unittest.TestCase):
+    def test_daemon_config_id_uses_only_load_time_config(self) -> None:
+        config = TranscriptionConfig(
+            model="large-v3",
+            language="ko",
+            device="cuda",
+            compute_type="int8_float16",
+            beam_size=5,
+            initial_prompt="prompt",
+            vad_filter=True,
+        )
+
+        self.assertEqual(
+            daemon_config_id(config),
+            daemon_config_id(
+                replace(
+                    config,
+                    language="en",
+                    beam_size=1,
+                    initial_prompt="different",
+                    vad_filter=False,
+                )
+            ),
+        )
+        self.assertNotEqual(
+            daemon_config_id(config),
+            daemon_config_id(replace(config, model="medium")),
+        )
+        self.assertNotEqual(
+            daemon_config_id(config),
+            daemon_config_id(replace(config, device="cpu")),
+        )
+        self.assertNotEqual(
+            daemon_config_id(config),
+            daemon_config_id(replace(config, compute_type="float16")),
+        )
+
+    def test_daemon_socket_path_is_config_scoped(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            config = TranscriptionConfig(
+                model="Systran/faster-whisper-large-v3",
+                language="ko",
+                device="cuda",
+                compute_type="int8_float16",
+                beam_size=5,
+                initial_prompt=None,
+                vad_filter=True,
+            )
+
+            socket_path = daemon_socket_path(config, socket_dir=Path(temp_dir))
+
+            self.assertEqual(socket_path.parent, Path(temp_dir))
+            self.assertEqual(socket_path.suffix, ".sock")
+            self.assertIn("systran-faster-whisper-large-v3", socket_path.name)
+            self.assertIn("cuda", socket_path.name)
+            self.assertIn("int8_float16", socket_path.name)
+
+
 class PersistentWorkerTranscriptionClientTest(unittest.TestCase):
     def test_second_request_reuses_single_worker_process(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -472,6 +533,43 @@ class PersistentWorkerTranscriptionClientTest(unittest.TestCase):
 
             with self.assertRaisesRegex(RuntimeError, "audio file not found"):
                 client.transcribe(TranscriptionRequest(audio_file=Path("missing.wav")))
+
+    def test_worker_response_metadata_is_preserved(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            client = PersistentWorkerTranscriptionClient(
+                repo_root=Path(temp_dir),
+                config=TranscriptionConfig(
+                    model="tiny",
+                    language="ko",
+                    device="cpu",
+                    compute_type="int8",
+                    beam_size=1,
+                    initial_prompt=None,
+                    vad_filter=True,
+                ),
+                status=lambda message: None,
+                process_factory=FakeWorkerFactory(
+                    [
+                        json.dumps(
+                            {
+                                "ok": True,
+                                "transcript": "done",
+                                "config_id": "large-v3-cuda-int8_float16",
+                                "model_load_count": 1,
+                                "queue_wait_seconds": 0.125,
+                            }
+                        )
+                        + "\n"
+                    ]
+                ),
+            )
+
+            result = client.transcribe(TranscriptionRequest(audio_file=Path("audio.wav")))
+
+            self.assertEqual(result.transcript, "done")
+            self.assertEqual(result.metadata["config_id"], "large-v3-cuda-int8_float16")
+            self.assertEqual(result.metadata["model_load_count"], 1)
+            self.assertEqual(result.metadata["queue_wait_seconds"], 0.125)
 
     def test_worker_stderr_is_relayed_through_status(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
