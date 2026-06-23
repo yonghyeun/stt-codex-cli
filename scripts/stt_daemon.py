@@ -22,7 +22,7 @@ from scripts import transcribe_worker
 DEFAULT_MODEL = "large-v3"
 DEFAULT_DEVICE = "auto"
 DEFAULT_COMPUTE_TYPE = "auto"
-DEFAULT_IDLE_TIMEOUT_SECONDS = 300.0
+DEFAULT_IDLE_TIMEOUT_SECONDS = 600.0
 
 
 class DaemonModel(transcribe_worker.WorkerModel, Protocol):

@@ -751,8 +751,8 @@ Shared daemon backend:
 - daemon response는 `config_id`, `model_load_count`, `queue_wait_seconds`,
   `elapsed_seconds`를 포함한다.
 - 같은 daemon 안에서는 request를 병렬 decode하지 않고 순차 처리한다.
-- 기본 idle timeout은 `300s`이며 `--stt-daemon-idle-timeout` 또는
-  `STT_DAEMON_IDLE_TIMEOUT`으로 바꾼다.
+- 기본 idle timeout은 마지막 active request 완료 후 `600s`이며
+  `--stt-daemon-idle-timeout` 또는 `STT_DAEMON_IDLE_TIMEOUT`으로 바꾼다.
 - daemon 시작 대기시간은 `--stt-daemon-start-timeout` 또는
   `STT_DAEMON_START_TIMEOUT`으로 바꾼다.
 - socket 위치는 기본 runtime/cache directory이며 `--stt-daemon-socket-dir` 또는

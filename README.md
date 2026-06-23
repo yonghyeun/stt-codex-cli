@@ -221,6 +221,8 @@ scripts/stt_codex.py --stt-backend daemon --stt-model large-v3 --stt-device cuda
 
 Daemon backend는 `model`, `device`, `compute_type`으로 정의되는 load-time config 단위로 socket을 나눈다. 같은 load-time config는 같은 daemon을 재사용하고, `language`, `beam_size`, `initial_prompt`, `vad_filter`는 request마다 전달한다. 한 daemon 안의 STT request는 GPU VRAM 중복 점유를 피하기 위해 순차 처리한다.
 
+Daemon은 active request가 없고 마지막 request 완료 후 기본 `600s`가 지나면 종료한다. 종료하면 socket이 제거되고 loaded model과 VRAM 점유도 해제된다.
+
 STT launcher는 `STT_PYTHON_BIN`을 명시하면 그 Python을 최우선으로 사용한다. 명시값이 없으면 현재 worktree의 `.venv`를 먼저 찾고, 없으면 `git worktree` 기준 main/primary worktree의 `.venv`를 fallback으로 사용한다. 따라서 issue worktree에서 실행해도 main workspace의 준비된 venv를 재사용할 수 있다.
 
 PTT release gap을 직접 지정:
