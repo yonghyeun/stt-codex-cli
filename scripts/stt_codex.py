@@ -36,6 +36,7 @@ from stt_runtime.run_artifacts import (
     save_run_artifacts as save_runtime_run_artifacts,
 )
 from stt_runtime.terminal import TerminalMode, validate_cwd
+from stt_runtime.terminal import TerminalStatusRenderer
 
 DEFAULT_CMD = "codex"
 DEFAULT_INJECT_MODE = "stt"
@@ -75,6 +76,11 @@ def parse_args() -> argparse.Namespace:
         "--no-color",
         action="store_true",
         help="Disable color in parent wrapper status lines.",
+    )
+    parser.add_argument(
+        "--debug-stt",
+        action="store_true",
+        help="Show raw parent/STT diagnostic lines instead of the compact status bar.",
     )
     parser.add_argument(
         "--codex-alt-screen",
@@ -285,6 +291,10 @@ def child_argv(args: argparse.Namespace) -> list[str]:
 
 
 def parent_status(args: argparse.Namespace, message: str) -> None:
+    renderer = getattr(args, "parent_status_renderer", None)
+    if renderer is not None:
+        renderer(message)
+        return
     if args.quiet_parent:
         return
     prefix = PARENT_PREFIX
@@ -372,10 +382,28 @@ def parent_banner(args: argparse.Namespace, argv: list[str], cwd: str | None) ->
             if args.save_run:
                 parent_status(args, f"run artifacts: {resolve_run_output_dir(args)}")
     parent_status(args, "child output follows")
+    if not args.debug_stt:
+        return
     if sys.stderr.isatty() and not args.no_color:
         print("\033[36m" + ("-" * 48) + "\033[0m", file=sys.stderr, flush=True)
     else:
         print("-" * 48, file=sys.stderr, flush=True)
+
+
+def create_parent_status_renderer(args: argparse.Namespace) -> TerminalStatusRenderer:
+    return TerminalStatusRenderer(
+        enabled=not args.quiet_parent,
+        color=not args.no_color,
+        debug=args.debug_stt,
+    )
+
+
+def initial_parent_status(args: argparse.Namespace) -> str:
+    if args.disable_inject_key:
+        return "STT passthrough | inject key disabled"
+    if args.inject_mode == "fixed-text":
+        return f"STT fixed-text | {args.inject_key} inserts {len(args.inject_text)} chars"
+    return f"STT idle | {args.inject_key} record"
 
 
 def main() -> int:
@@ -383,7 +411,10 @@ def main() -> int:
     try:
         cwd = validate_cwd(args.cwd)
         argv = child_argv(args)
+        parent_status_renderer = create_parent_status_renderer(args)
+        args.parent_status_renderer = parent_status_renderer
         parent_banner(args, argv, cwd)
+        parent_status_renderer.set_status(initial_parent_status(args))
         pid, child_fd = spawn_child(argv, cwd)
         parent_status(args, f"child pid: {pid}")
         with TerminalMode():
@@ -394,6 +425,7 @@ def main() -> int:
                 child_fd=child_fd,
                 child_command=argv,
                 status=lambda message: parent_status(args, message),
+                reserved_terminal_rows=parent_status_renderer.reserved_rows,
             )
         parent_status(args, f"child exited: {exit_code}")
         return exit_code

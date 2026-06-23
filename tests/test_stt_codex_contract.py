@@ -168,6 +168,32 @@ class RuntimeDefaultContractTest(unittest.TestCase):
         self.assertEqual(stt_codex.resolve_audio_handoff(args), "file")
 
 
+class ParentStatusWiringTest(unittest.TestCase):
+    def parse_with(
+        self,
+        argv: list[str] | None = None,
+        env: dict[str, str] | None = None,
+    ) -> argparse.Namespace:
+        with (
+            patch.object(sys, "argv", ["stt_codex.py", *(argv or [])]),
+            patch.dict(os.environ, env or {}, clear=True),
+        ):
+            return stt_codex.parse_args()
+
+    def test_debug_stt_flag_defaults_off_and_can_be_enabled(self) -> None:
+        self.assertFalse(self.parse_with().debug_stt)
+        self.assertTrue(self.parse_with(["--debug-stt"]).debug_stt)
+
+    def test_parent_status_delegates_to_attached_renderer(self) -> None:
+        calls: list[str] = []
+        args = make_args()
+        args.parent_status_renderer = calls.append
+
+        stt_codex.parent_status(args, "recording started: in-memory audio buffer")
+
+        self.assertEqual(calls, ["recording started: in-memory audio buffer"])
+
+
 class RunArtifactTest(unittest.TestCase):
     def test_save_run_disabled_writes_nothing(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

@@ -358,6 +358,7 @@ def passthrough(
     child_command: list[str],
     status: StatusFn,
     transcription_client: TranscriptionClient | None = None,
+    reserved_terminal_rows: int = 0,
 ) -> int:
     selector = selectors.DefaultSelector()
     selector.register(child_fd, selectors.EVENT_READ, "child")
@@ -383,11 +384,11 @@ def passthrough(
         )
 
     def handle_sigwinch(signum: int, frame: object) -> None:
-        copy_window_size(child_fd)
+        copy_window_size(child_fd, reserved_rows=reserved_terminal_rows)
 
     previous_sigwinch = signal.getsignal(signal.SIGWINCH)
     signal.signal(signal.SIGWINCH, handle_sigwinch)
-    copy_window_size(child_fd)
+    copy_window_size(child_fd, reserved_rows=reserved_terminal_rows)
 
     try:
         while True:
