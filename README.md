@@ -245,8 +245,22 @@ Fixed smoke latency input은 `evals/inputs/speech/v1`의 `cmd-0002`, `cmd-0018`,
 latency는 persistent worker request wall time이며 live `arecord` stop latency,
 child PTY injection latency, terminal render latency를 포함하지 않는다.
 
+### Option Taxonomy
+
+STT wrapper option은 profile로 묶지 않는다. 각 option은 바꾸는 계층이 다르다.
+
+| 분류 | options | 의미 |
+| --- | --- | --- |
+| load-time | `--stt-model`, `--stt-device`, `--stt-compute-type`, `--stt-backend worker` | model load와 실행 process 수명에 영향을 준다. |
+| decode-time | `--stt-beam-size`, `--stt-no-vad-filter`, `--stt-initial-prompt`, `--stt-language` | 같은 audio를 transcript로 바꾸는 STT decoding 정책이다. |
+| runtime/backend | `--release-gap`, `--min-duration`, `--max-duration`, `--audio-handoff` | 녹음 stop 판정, 녹음 길이 guard, audio 전달 방식을 바꾼다. |
+| artifact/debug | `--save-run`, `--keep-audio`, `--run-output-dir`, `--temp-dir` | 저장과 debugging 산출물 정책이다. |
+
+`--release-gap`은 runtime stop timing option이다. STT model quality, worker backend,
+buffer handoff, beam/VAD 정책과 같은 profile로 묶지 않는다.
+
 #28 closeout의 최종 latency/accuracy 요약 위치는 이 section과
-`scripts/README.md`의 speed tradeoff section이다. 세부 evidence report는
+`scripts/README.md`의 `Speed/Accuracy Tradeoff Summary`다. 세부 evidence report는
 `evals/stt_accuracy/reports/2026-06-23-buffer-handoff.md`,
 `evals/stt_accuracy/reports/2026-06-23-release-gap-speed-profile.md`,
 `evals/stt_accuracy/reports/2026-06-23-beam-vad-tradeoff.md`에 둔다. Report와

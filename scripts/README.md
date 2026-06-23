@@ -281,6 +281,21 @@ Floor와 report 위치:
 - #28 closeout summary source: 이 section과 root `README.md`의
   `Speed/Accuracy Decision Surface`.
 
+## Option Taxonomy
+
+`scripts/stt_codex.py` option은 하나의 speed/accuracy profile로 묶지 않는다.
+
+| 분류 | options | 실행 의미 |
+| --- | --- | --- |
+| load-time | `--stt-model`, `--stt-device`, `--stt-compute-type`, `--stt-backend worker` | model load 비용과 worker process 수명에 영향을 준다. |
+| decode-time | `--stt-beam-size`, `--stt-no-vad-filter`, `--stt-initial-prompt`, `--stt-language` | 이미 녹음된 audio를 transcript로 바꾸는 decoding 정책이다. |
+| runtime/backend | `--release-gap`, `--min-duration`, `--max-duration`, `--audio-handoff` | PTT stop timing, 녹음 길이 guard, audio handoff 방식을 바꾼다. |
+| artifact/debug | `--save-run`, `--keep-audio`, `--run-output-dir`, `--temp-dir` | run artifact와 임시 audio 보존 정책이다. |
+
+`--release-gap`은 PTT runtime option이다. `--stt-backend worker`와
+`--audio-handoff buffer`는 backend/request path option이다. `--stt-beam-size`와
+VAD 설정은 decode-time option이다.
+
 ## Speech Sample Recording
 
 sample id 목록에서 아직 `audio.wav`가 없는 다음 sample 하나를 선택해 녹음한다.
