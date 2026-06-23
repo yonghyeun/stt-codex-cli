@@ -593,6 +593,9 @@ scripts/stt_codex.py --trigger-mode hold --release-gap 0.75
 - 기본 runtime은 `--stt-backend worker --audio-handoff auto`다. 저장/debug option이
   꺼져 있으면 buffer handoff를 사용한다. Fixed smoke 평균은 `2.536s`이고
   #29 subprocess 평균 `5.956s` 대비 `-3.420s`다.
+- 여러 wrapper가 같은 모델을 공유해야 하면 `--stt-backend daemon`을 사용한다. Daemon은
+  `model/device/compute_type` load-time config 단위로 socket을 나누고, 같은 config의
+  request를 하나의 loaded model로 순차 처리한다.
 - `--stt-beam-size 1`은 VAD on일 때 fixed smoke 평균 `5.173s`로 default
   `beam5-vad-on` `5.191s` 대비 `-0.018s`였다. Full suite 미측정이므로
   fixed-smoke-only 후보로만 다룬다.
@@ -727,6 +730,7 @@ load한다. audio handoff는 `--audio-handoff`로 고른다.
 
 ```bash
 scripts/stt_codex.py --stt-model large-v3 --stt-device cuda --stt-compute-type float16
+scripts/stt_codex.py --stt-backend daemon --stt-model large-v3 --stt-device cuda --stt-compute-type int8_float16
 scripts/stt_codex.py --audio-handoff file
 scripts/stt_codex.py --stt-backend subprocess
 ```
@@ -743,3 +747,20 @@ scripts/stt_codex.py --stt-backend subprocess
 - `--stt-backend subprocess`는 이전 file-backed subprocess path를 명시적으로 사용한다.
 - worker protocol은 stdin/stdout newline-delimited JSON이다.
 - worker status와 model load log는 stderr에 출력한다.
+
+Shared daemon backend:
+
+- `--stt-backend daemon`은 `scripts/stt_daemon.sh`가 CUDA library path를 준비한 뒤
+  `scripts/stt_daemon.py`를 Unix domain socket server로 실행한다.
+- socket 이름은 `model`, `device`, `compute_type`에서 계산한 config id를 사용한다.
+- `language`, `beam_size`, `initial_prompt`, `vad_filter`는 request-time option으로
+  daemon request에 포함된다.
+- daemon response는 `config_id`, `model_load_count`, `queue_wait_seconds`,
+  `elapsed_seconds`를 포함한다.
+- 같은 daemon 안에서는 request를 병렬 decode하지 않고 순차 처리한다.
+- 기본 idle timeout은 마지막 active request 완료 후 `600s`이며
+  `--stt-daemon-idle-timeout` 또는 `STT_DAEMON_IDLE_TIMEOUT`으로 바꾼다.
+- daemon 시작 대기시간은 `--stt-daemon-start-timeout` 또는
+  `STT_DAEMON_START_TIMEOUT`으로 바꾼다.
+- socket 위치는 기본 runtime/cache directory이며 `--stt-daemon-socket-dir` 또는
+  `STT_DAEMON_SOCKET_DIR`으로 바꾼다.

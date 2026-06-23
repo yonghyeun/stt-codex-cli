@@ -51,6 +51,8 @@ DEFAULT_RUN_OUTPUT_DIR = "output/runs"
 DEFAULT_STT_BACKEND = "worker"
 DEFAULT_AUDIO_HANDOFF = "auto"
 DEFAULT_STT_INITIAL_PROMPT = DEFAULT_KOREAN_PHONETIC_INITIAL_PROMPT
+DEFAULT_STT_DAEMON_IDLE_TIMEOUT = 600.0
+DEFAULT_STT_DAEMON_START_TIMEOUT = 30.0
 PARENT_PREFIX = "[stt-parent]"
 
 
@@ -168,9 +170,42 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--stt-backend",
-        choices=("subprocess", "worker"),
+        choices=("subprocess", "worker", "daemon"),
         default=os.environ.get("STT_BACKEND", DEFAULT_STT_BACKEND),
         help=f"STT execution backend. Default: {DEFAULT_STT_BACKEND}",
+    )
+    parser.add_argument(
+        "--stt-daemon-socket-dir",
+        default=os.environ.get("STT_DAEMON_SOCKET_DIR"),
+        help="Directory for shared STT daemon sockets. Default: runtime/cache directory.",
+    )
+    parser.add_argument(
+        "--stt-daemon-idle-timeout",
+        type=positive_float,
+        default=float(
+            os.environ.get(
+                "STT_DAEMON_IDLE_TIMEOUT",
+                str(DEFAULT_STT_DAEMON_IDLE_TIMEOUT),
+            )
+        ),
+        help=(
+            "Seconds before an idle shared STT daemon exits. "
+            f"Default: {DEFAULT_STT_DAEMON_IDLE_TIMEOUT:g}s"
+        ),
+    )
+    parser.add_argument(
+        "--stt-daemon-start-timeout",
+        type=positive_float,
+        default=float(
+            os.environ.get(
+                "STT_DAEMON_START_TIMEOUT",
+                str(DEFAULT_STT_DAEMON_START_TIMEOUT),
+            )
+        ),
+        help=(
+            "Seconds to wait for a shared STT daemon to become ready. "
+            f"Default: {DEFAULT_STT_DAEMON_START_TIMEOUT:g}s"
+        ),
     )
     parser.add_argument(
         "--audio-handoff",

@@ -128,6 +128,11 @@ class CodexInputTranscriptionClientTest(unittest.TestCase):
 
         self.assertEqual(codex_input.resolve_audio_handoff(args), "buffer")
 
+    def test_auto_audio_handoff_uses_buffer_for_daemon_speed_path(self) -> None:
+        args = make_args(stt_backend="daemon", save_run=False, keep_audio=False)
+
+        self.assertEqual(codex_input.resolve_audio_handoff(args), "buffer")
+
     def test_auto_audio_handoff_uses_file_when_artifacts_are_requested(self) -> None:
         self.assertEqual(codex_input.resolve_audio_handoff(make_args(save_run=True)), "file")
         self.assertEqual(codex_input.resolve_audio_handoff(make_args(keep_audio=True)), "file")

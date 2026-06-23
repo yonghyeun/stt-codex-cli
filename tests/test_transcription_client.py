@@ -5,6 +5,7 @@ import json
 import subprocess
 import tempfile
 import unittest
+from dataclasses import replace
 from io import StringIO
 from pathlib import Path
 from typing import Any, Sequence
@@ -12,11 +13,14 @@ from typing import Any, Sequence
 from scripts import transcribe_worker
 from stt_features import codex_input
 from stt_runtime.transcription import (
+    DaemonTranscriptionClient,
     PersistentWorkerTranscriptionClient,
     SubprocessTranscriptionClient,
     TranscriptionConfig,
     TranscriptionRequest,
     TranscriptionResult,
+    daemon_config_id,
+    daemon_socket_path,
     transcribe_audio,
 )
 
@@ -132,6 +136,39 @@ class FakeWorkerFactory:
         process = FakeWorkerProcess(self.stdout_lines, self.stderr_lines)
         self.processes.append(process)
         return process
+
+
+class FakeDaemonFactory:
+    def __init__(self) -> None:
+        self.calls: list[tuple[Sequence[str], dict[str, Any]]] = []
+
+    def __call__(self, command: Sequence[str], **kwargs: Any) -> FakeWorkerProcess:
+        self.calls.append((list(command), kwargs))
+        return FakeWorkerProcess([])
+
+
+class FakeDaemonRequest:
+    def __init__(
+        self,
+        responses: Sequence[dict[str, object]],
+        *,
+        fail_first: Exception | None = None,
+    ) -> None:
+        self._responses = list(responses)
+        self._fail_first = fail_first
+        self.calls: list[tuple[Path, dict[str, object], float]] = []
+
+    def __call__(
+        self,
+        socket_path: Path,
+        request: dict[str, object],
+        *,
+        timeout_seconds: float,
+    ) -> dict[str, object]:
+        self.calls.append((socket_path, request, timeout_seconds))
+        if self._fail_first is not None and len(self.calls) == 1:
+            raise self._fail_first
+        return self._responses.pop(0)
 
 
 class FakeSegment:
@@ -322,6 +359,64 @@ class SubprocessTranscriptionClientTest(unittest.TestCase):
             self.assertIn("--no-vad-filter", command)
 
 
+class DaemonConfigTest(unittest.TestCase):
+    def test_daemon_config_id_uses_only_load_time_config(self) -> None:
+        config = TranscriptionConfig(
+            model="large-v3",
+            language="ko",
+            device="cuda",
+            compute_type="int8_float16",
+            beam_size=5,
+            initial_prompt="prompt",
+            vad_filter=True,
+        )
+
+        self.assertEqual(
+            daemon_config_id(config),
+            daemon_config_id(
+                replace(
+                    config,
+                    language="en",
+                    beam_size=1,
+                    initial_prompt="different",
+                    vad_filter=False,
+                )
+            ),
+        )
+        self.assertNotEqual(
+            daemon_config_id(config),
+            daemon_config_id(replace(config, model="medium")),
+        )
+        self.assertNotEqual(
+            daemon_config_id(config),
+            daemon_config_id(replace(config, device="cpu")),
+        )
+        self.assertNotEqual(
+            daemon_config_id(config),
+            daemon_config_id(replace(config, compute_type="float16")),
+        )
+
+    def test_daemon_socket_path_is_config_scoped(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            config = TranscriptionConfig(
+                model="Systran/faster-whisper-large-v3",
+                language="ko",
+                device="cuda",
+                compute_type="int8_float16",
+                beam_size=5,
+                initial_prompt=None,
+                vad_filter=True,
+            )
+
+            socket_path = daemon_socket_path(config, socket_dir=Path(temp_dir))
+
+            self.assertEqual(socket_path.parent, Path(temp_dir))
+            self.assertEqual(socket_path.suffix, ".sock")
+            self.assertIn("systran-faster-whisper-large-v3", socket_path.name)
+            self.assertIn("cuda", socket_path.name)
+            self.assertIn("int8_float16", socket_path.name)
+
+
 class PersistentWorkerTranscriptionClientTest(unittest.TestCase):
     def test_second_request_reuses_single_worker_process(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -473,6 +568,43 @@ class PersistentWorkerTranscriptionClientTest(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "audio file not found"):
                 client.transcribe(TranscriptionRequest(audio_file=Path("missing.wav")))
 
+    def test_worker_response_metadata_is_preserved(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            client = PersistentWorkerTranscriptionClient(
+                repo_root=Path(temp_dir),
+                config=TranscriptionConfig(
+                    model="tiny",
+                    language="ko",
+                    device="cpu",
+                    compute_type="int8",
+                    beam_size=1,
+                    initial_prompt=None,
+                    vad_filter=True,
+                ),
+                status=lambda message: None,
+                process_factory=FakeWorkerFactory(
+                    [
+                        json.dumps(
+                            {
+                                "ok": True,
+                                "transcript": "done",
+                                "config_id": "large-v3-cuda-int8_float16",
+                                "model_load_count": 1,
+                                "queue_wait_seconds": 0.125,
+                            }
+                        )
+                        + "\n"
+                    ]
+                ),
+            )
+
+            result = client.transcribe(TranscriptionRequest(audio_file=Path("audio.wav")))
+
+            self.assertEqual(result.transcript, "done")
+            self.assertEqual(result.metadata["config_id"], "large-v3-cuda-int8_float16")
+            self.assertEqual(result.metadata["model_load_count"], 1)
+            self.assertEqual(result.metadata["queue_wait_seconds"], 0.125)
+
     def test_worker_stderr_is_relayed_through_status(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             statuses: list[str] = []
@@ -499,6 +631,138 @@ class PersistentWorkerTranscriptionClientTest(unittest.TestCase):
 
             self.assertIn("stt: loading model", statuses)
             self.assertIn("stt: worker ready", statuses)
+
+
+class DaemonTranscriptionClientTest(unittest.TestCase):
+    def test_spawns_daemon_when_socket_is_not_available_then_sends_request(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            socket_dir = Path(temp_dir) / "sockets"
+            factory = FakeDaemonFactory()
+            request = FakeDaemonRequest(
+                [
+                    {
+                        "ok": True,
+                        "transcript": "daemon transcript",
+                        "config_id": "unused",
+                        "model_load_count": 1,
+                    }
+                ],
+                fail_first=FileNotFoundError("missing socket"),
+            )
+            statuses: list[str] = []
+            client = DaemonTranscriptionClient(
+                repo_root=Path(temp_dir),
+                config=TranscriptionConfig(
+                    model="large-v3",
+                    language="ko",
+                    device="cuda",
+                    compute_type="int8_float16",
+                    beam_size=5,
+                    initial_prompt="prompt text",
+                    vad_filter=True,
+                ),
+                status=statuses.append,
+                socket_dir=socket_dir,
+                idle_timeout_seconds=300.0,
+                start_timeout_seconds=1.0,
+                process_factory=factory,
+                request_fn=request,
+                wait_for_socket=lambda path, timeout: None,
+            )
+
+            result = client.transcribe(
+                TranscriptionRequest(audio_bytes=b"RIFF fake wav", audio_format="wav")
+            )
+
+            self.assertEqual(result.transcript, "daemon transcript")
+            self.assertEqual(result.metadata["model_load_count"], 1)
+            self.assertEqual(len(factory.calls), 1)
+            command, kwargs = factory.calls[0]
+            self.assertEqual(command[0], str(Path(temp_dir) / "scripts/stt_daemon.sh"))
+            self.assertIn("--config-id", command)
+            self.assertIn("--socket", command)
+            self.assertIn("--idle-timeout", command)
+            self.assertEqual(kwargs["cwd"], Path(temp_dir))
+            self.assertEqual(len(request.calls), 2)
+            _, payload, timeout = request.calls[1]
+            self.assertIn("config_id", payload)
+            self.assertNotIn("audio_file", payload)
+            self.assertIn("audio_bytes_b64", payload)
+            self.assertEqual(payload["language"], "ko")
+            self.assertEqual(payload["beam_size"], 5)
+            self.assertEqual(payload["initial_prompt"], "prompt text")
+            self.assertTrue(payload["vad_filter"])
+            self.assertEqual(timeout, 1.0)
+            self.assertEqual(statuses, ["starting stt daemon...", "transcribing..."])
+
+    def test_reuses_active_daemon_without_spawning(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            factory = FakeDaemonFactory()
+            request = FakeDaemonRequest(
+                [
+                    {
+                        "ok": True,
+                        "transcript": "already warm",
+                        "config_id": "unused",
+                    }
+                ]
+            )
+            client = DaemonTranscriptionClient(
+                repo_root=Path(temp_dir),
+                config=TranscriptionConfig(
+                    model="large-v3",
+                    language="ko",
+                    device="cuda",
+                    compute_type="int8_float16",
+                    beam_size=1,
+                    initial_prompt=None,
+                    vad_filter=False,
+                ),
+                status=lambda message: None,
+                socket_dir=Path(temp_dir),
+                idle_timeout_seconds=300.0,
+                start_timeout_seconds=2.0,
+                process_factory=factory,
+                request_fn=request,
+                wait_for_socket=lambda path, timeout: None,
+            )
+
+            result = client.transcribe(TranscriptionRequest(audio_file=Path("audio.wav")))
+
+            self.assertEqual(result.transcript, "already warm")
+            self.assertEqual(factory.calls, [])
+            _, payload, _ = request.calls[0]
+            self.assertEqual(payload["audio_file"], "audio.wav")
+            self.assertEqual(payload["beam_size"], 1)
+            self.assertIsNone(payload["initial_prompt"])
+            self.assertFalse(payload["vad_filter"])
+
+    def test_daemon_error_response_raises_runtime_error(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            client = DaemonTranscriptionClient(
+                repo_root=Path(temp_dir),
+                config=TranscriptionConfig(
+                    model="large-v3",
+                    language="ko",
+                    device="cuda",
+                    compute_type="int8_float16",
+                    beam_size=5,
+                    initial_prompt=None,
+                    vad_filter=True,
+                ),
+                status=lambda message: None,
+                socket_dir=Path(temp_dir),
+                idle_timeout_seconds=300.0,
+                start_timeout_seconds=2.0,
+                process_factory=FakeDaemonFactory(),
+                request_fn=FakeDaemonRequest(
+                    [{"ok": False, "error": "config mismatch"}]
+                ),
+                wait_for_socket=lambda path, timeout: None,
+            )
+
+            with self.assertRaisesRegex(RuntimeError, "config mismatch"):
+                client.transcribe(TranscriptionRequest(audio_file=Path("audio.wav")))
 
 
 class TranscriptionClientFactoryTest(unittest.TestCase):
@@ -543,6 +807,36 @@ class TranscriptionClientFactoryTest(unittest.TestCase):
             )
 
             self.assertIsInstance(client, PersistentWorkerTranscriptionClient)
+
+    def test_daemon_backend_selects_daemon_client(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            config = TranscriptionConfig(
+                model="tiny",
+                language="ko",
+                device="cpu",
+                compute_type="int8",
+                beam_size=1,
+                initial_prompt=None,
+                vad_filter=True,
+            )
+
+            client = codex_input.create_transcription_client(
+                args=type(
+                    "Args",
+                    (),
+                    {
+                        "stt_backend": "daemon",
+                        "stt_daemon_socket_dir": str(Path(temp_dir) / "socket-dir"),
+                        "stt_daemon_idle_timeout": 300.0,
+                        "stt_daemon_start_timeout": 2.0,
+                    },
+                )(),
+                repo_root=Path(temp_dir),
+                config=config,
+                status=lambda message: None,
+            )
+
+            self.assertIsInstance(client, DaemonTranscriptionClient)
 
 
 class TranscribeWorkerScriptTest(unittest.TestCase):

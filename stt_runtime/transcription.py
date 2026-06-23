@@ -1,11 +1,16 @@
 from __future__ import annotations
 
 import base64
+import hashlib
 import json
+import os
+import re
+import socket
 import subprocess
 import threading
+import time
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Protocol, TextIO
 
@@ -44,6 +49,54 @@ class TranscriptionRequest:
 class TranscriptionResult:
     transcript: str
     stderr_lines: tuple[str, ...]
+    metadata: dict[str, object] = field(default_factory=dict)
+
+
+def daemon_config_id(config: TranscriptionConfig) -> str:
+    payload = {
+        "model": config.model,
+        "device": config.device,
+        "compute_type": config.compute_type,
+    }
+    encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
+    digest = hashlib.sha256(encoded).hexdigest()[:12]
+    readable = "-".join(
+        (
+            _slug_for_socket(config.model),
+            _slug_for_socket(config.device),
+            _slug_for_socket(config.compute_type),
+        )
+    )
+    return f"{readable[:80].strip('-')}-{digest}"
+
+
+def daemon_socket_path(
+    config: TranscriptionConfig,
+    *,
+    socket_dir: Path | None = None,
+) -> Path:
+    base_dir = socket_dir if socket_dir is not None else default_daemon_socket_dir()
+    return base_dir / f"{daemon_config_id(config)}.sock"
+
+
+def default_daemon_socket_dir() -> Path:
+    runtime_dir = os.environ.get("XDG_RUNTIME_DIR")
+    if runtime_dir:
+        return Path(runtime_dir) / "stt-codex-cli"
+    return Path.home() / ".cache" / "stt-codex-cli"
+
+
+def _slug_for_socket(value: str) -> str:
+    slug = re.sub(r"[^a-z0-9_.-]+", "-", value.lower()).strip("-")
+    return slug or "value"
+
+
+def _response_metadata(response: dict[str, object]) -> dict[str, object]:
+    return {
+        key: value
+        for key, value in response.items()
+        if key not in {"ok", "transcript"}
+    }
 
 
 class TranscriptionClient(Protocol):
@@ -97,6 +150,37 @@ class WorkerProcessFactory(Protocol):
         stderr: int,
         bufsize: int,
     ) -> WorkerProcess:
+        ...
+
+
+class DaemonProcessFactory(Protocol):
+    def __call__(
+        self,
+        command: Sequence[str],
+        *,
+        cwd: Path,
+        stdin: int,
+        stdout: int,
+        stderr: int,
+        text: bool,
+        start_new_session: bool,
+    ) -> WorkerProcess:
+        ...
+
+
+class DaemonRequestFn(Protocol):
+    def __call__(
+        self,
+        socket_path: Path,
+        request: dict[str, object],
+        *,
+        timeout_seconds: float,
+    ) -> dict[str, object]:
+        ...
+
+
+class DaemonWaitFn(Protocol):
+    def __call__(self, socket_path: Path, timeout_seconds: float) -> None:
         ...
 
 
@@ -218,6 +302,7 @@ class PersistentWorkerTranscriptionClient:
         return TranscriptionResult(
             transcript=transcript.strip(),
             stderr_lines=tuple(self._stderr_lines[stderr_start:]),
+            metadata=_response_metadata(response),
         )
 
     def close(self) -> None:
@@ -330,6 +415,170 @@ class PersistentWorkerTranscriptionClient:
         if request.audio_file is None:
             raise RuntimeError("worker transcription requires audio input")
         return {"audio_file": str(request.audio_file)}
+
+
+class DaemonTranscriptionClient:
+    def __init__(
+        self,
+        *,
+        repo_root: Path,
+        config: TranscriptionConfig,
+        status: StatusFn,
+        socket_dir: Path | None = None,
+        idle_timeout_seconds: float = 300.0,
+        start_timeout_seconds: float = 30.0,
+        process_factory: DaemonProcessFactory = subprocess.Popen,
+        request_fn: DaemonRequestFn | None = None,
+        wait_for_socket: DaemonWaitFn | None = None,
+    ) -> None:
+        self._repo_root = repo_root
+        self._config = config
+        self._status = status
+        self._socket_path = daemon_socket_path(config, socket_dir=socket_dir)
+        self._config_id = daemon_config_id(config)
+        self._idle_timeout_seconds = idle_timeout_seconds
+        self._start_timeout_seconds = start_timeout_seconds
+        self._process_factory = process_factory
+        self._request_fn = request_fn or request_daemon
+        self._wait_for_socket = wait_for_socket or wait_for_daemon_socket
+
+    def transcribe(self, request: TranscriptionRequest) -> TranscriptionResult:
+        payload = self._request_payload(request)
+        try:
+            response = self._request(payload, announce=self._socket_path.exists())
+        except OSError as error:
+            if not _is_daemon_connect_error(error):
+                raise
+            self._start_daemon()
+            response = self._request(payload, announce=True)
+
+        if response.get("ok") is not True:
+            error = response.get("error")
+            if not isinstance(error, str) or not error:
+                error = "unknown daemon error"
+            raise RuntimeError(f"STT daemon failed: {error}")
+
+        transcript = response.get("transcript")
+        if not isinstance(transcript, str):
+            raise RuntimeError("STT daemon response did not include transcript")
+        return TranscriptionResult(
+            transcript=transcript.strip(),
+            stderr_lines=(),
+            metadata=_response_metadata(response),
+        )
+
+    def close(self) -> None:
+        return None
+
+    def _request(
+        self,
+        payload: dict[str, object],
+        *,
+        announce: bool,
+    ) -> dict[str, object]:
+        if announce:
+            self._status("transcribing...")
+        return self._request_fn(
+            self._socket_path,
+            payload,
+            timeout_seconds=self._start_timeout_seconds,
+        )
+
+    def _start_daemon(self) -> None:
+        if self._socket_path.exists():
+            self._socket_path.unlink(missing_ok=True)
+        self._socket_path.parent.mkdir(parents=True, exist_ok=True)
+        self._status("starting stt daemon...")
+        self._process_factory(
+            self._build_command(),
+            cwd=self._repo_root,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            text=True,
+            start_new_session=True,
+        )
+        self._wait_for_socket(self._socket_path, self._start_timeout_seconds)
+
+    def _build_command(self) -> list[str]:
+        return [
+            str(self._repo_root / "scripts/stt_daemon.sh"),
+            "--socket",
+            str(self._socket_path),
+            "--config-id",
+            self._config_id,
+            "--model",
+            self._config.model,
+            "--device",
+            self._config.device,
+            "--compute-type",
+            self._config.compute_type,
+            "--idle-timeout",
+            f"{self._idle_timeout_seconds:g}",
+        ]
+
+    def _request_payload(self, request: TranscriptionRequest) -> dict[str, object]:
+        payload: dict[str, object] = {
+            "config_id": self._config_id,
+            "language": self._config.language,
+            "beam_size": self._config.beam_size,
+            "initial_prompt": self._config.initial_prompt,
+            "vad_filter": self._config.vad_filter,
+        }
+        if request.audio_bytes is not None:
+            payload["audio_bytes_b64"] = base64.b64encode(request.audio_bytes).decode(
+                "ascii"
+            )
+            payload["audio_format"] = request.audio_format
+            return payload
+        if request.audio_file is None:
+            raise RuntimeError("daemon transcription requires audio input")
+        payload["audio_file"] = str(request.audio_file)
+        return payload
+
+
+def request_daemon(
+    socket_path: Path,
+    request: dict[str, object],
+    *,
+    timeout_seconds: float,
+) -> dict[str, object]:
+    with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as client:
+        client.settimeout(timeout_seconds)
+        client.connect(str(socket_path))
+        client.sendall(json.dumps(request, ensure_ascii=False).encode() + b"\n")
+        line = _read_socket_line(client)
+    response = json.loads(line)
+    if not isinstance(response, dict):
+        raise RuntimeError("STT daemon returned invalid response")
+    return response
+
+
+def wait_for_daemon_socket(socket_path: Path, timeout_seconds: float) -> None:
+    deadline = time.monotonic() + timeout_seconds
+    while time.monotonic() < deadline:
+        if socket_path.exists():
+            return
+        time.sleep(0.05)
+    raise RuntimeError(f"STT daemon socket was not ready: {socket_path}")
+
+
+def _read_socket_line(client: socket.socket) -> str:
+    chunks: list[bytes] = []
+    while True:
+        chunk = client.recv(1)
+        if not chunk:
+            break
+        if chunk == b"\n":
+            break
+        chunks.append(chunk)
+    if not chunks:
+        raise RuntimeError("STT daemon stopped without response")
+    return b"".join(chunks).decode()
+
+
+def _is_daemon_connect_error(error: OSError) -> bool:
+    return isinstance(error, (FileNotFoundError, ConnectionRefusedError))
 
 
 def transcribe_audio(
