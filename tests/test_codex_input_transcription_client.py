@@ -53,7 +53,7 @@ def make_args(**overrides: object) -> SimpleNamespace:
         "stt_beam_size": 5,
         "stt_initial_prompt": "prompt",
         "stt_no_vad_filter": False,
-        "stt_backend": "worker",
+        "stt_backend": "daemon",
         "audio_handoff": "auto",
         "inject_mode": "stt",
         "disable_inject_key": False,
@@ -128,8 +128,10 @@ class CodexInputTranscriptionClientTest(unittest.TestCase):
 
         self.assertEqual(codex_input.resolve_audio_handoff(args), "buffer")
 
-    def test_auto_audio_handoff_uses_buffer_for_daemon_speed_path(self) -> None:
-        args = make_args(stt_backend="daemon", save_run=False, keep_audio=False)
+    def test_auto_audio_handoff_uses_buffer_for_default_daemon_speed_path(self) -> None:
+        args = make_args(save_run=False, keep_audio=False)
+
+        self.assertEqual(args.stt_backend, "daemon")
 
         self.assertEqual(codex_input.resolve_audio_handoff(args), "buffer")
 
