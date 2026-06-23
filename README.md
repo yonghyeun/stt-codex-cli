@@ -207,32 +207,33 @@ scripts/stt_codex.py --stt-backend worker --audio-handoff buffer
 
 `--audio-handoff auto`는 worker backend에서 저장/debug audio option이 꺼진 경우에만 buffer를 사용한다. `--save-run` 또는 `--keep-audio`가 켜지면 file handoff로 돌아가 audio 보존 계약을 우선한다.
 
-PTT speed profile을 명시:
+PTT release gap을 직접 지정:
 
 ```bash
-scripts/stt_codex.py --ptt-profile speed
+scripts/stt_codex.py --release-gap 0.75
 ```
 
-기본 `accuracy` profile의 release gap은 `0.75s`다. `speed` profile의 release gap은 `0.35s`다. Trigger 반복 입력이 끊긴 뒤 stop 판정까지의 deterministic wait delta는 `0.75s -> 0.35s`, 즉 `-0.40s`다.
+기본 release gap은 `0.35s`다. Trigger 반복 입력이 끊긴 뒤 stop 판정까지의 대기 시간을 더 길게 두고 싶으면 `--release-gap` 또는 `STT_PTT_RELEASE_GAP`으로 값을 직접 지정한다.
 
-직접 지정한 release gap은 profile보다 우선한다.
+우선순위는 CLI 인자, 환경변수, 기본값 순서다.
 
 ```bash
-scripts/stt_codex.py --ptt-profile speed --release-gap 0.5
-STT_PTT_PROFILE=speed scripts/stt_codex.py
+scripts/stt_codex.py --release-gap 0.5
 STT_PTT_RELEASE_GAP=0.5 scripts/stt_codex.py
 ```
 
+Migration note: `--ptt-profile`과 `STT_PTT_PROFILE`은 더 이상 설정 surface가 아니다. 이전 `speed` 값은 새 기본값 `0.35s`와 같다. 이전 `accuracy` 값이 필요하면 `--release-gap 0.75` 또는 `STT_PTT_RELEASE_GAP=0.75`를 사용한다.
+
 ### Speed/Accuracy Decision Surface
 
-기본값은 정확도 우선이다. `scripts/stt_codex.py` 기본 실행은 `--ptt-profile accuracy`,
-`--stt-beam-size 5`, VAD on, `--stt-backend subprocess` 기준이다. Speed path는
-명시적으로 켠다.
+기본값은 `release gap 0.35s`, `--stt-beam-size 5`, VAD on,
+`--stt-backend subprocess` 기준이다. 더 긴 PTT stop 판정 대기는 `--release-gap`
+으로 명시한다.
 
 | 선택 | 현재 command/config | latency evidence | accuracy evidence | 결정 |
 | --- | --- | ---: | ---: | --- |
-| 기본 PTT | `--ptt-profile accuracy` 또는 생략 | release gap `0.75s` | release-gap leaf에서 STT 재측정 없음 | 기본값 |
-| PTT speed | `--ptt-profile speed` | stop-wait `0.75s -> 0.35s`, deterministic delta `-0.40s` | live truncation 미측정 | opt-in |
+| 기본 PTT | 생략 | release gap `0.35s` | release-gap leaf에서 STT 재측정 없음 | 기본값 |
+| 긴 PTT stop wait | `--release-gap 0.75` | stop-wait `0.35s -> 0.75s`, deterministic delta `+0.40s` | live truncation 미측정 | opt-in |
 | worker file | `--stt-backend worker --audio-handoff file` | fixed smoke avg `2.619s`, #29 subprocess `5.956s` 대비 `-3.337s` | score `0.6423`, normalized CER `0.3156` | speed path |
 | worker buffer | `--stt-backend worker --audio-handoff buffer` | fixed smoke avg `2.536s`, #29 대비 `-3.420s`, worker file 대비 `-0.083s` | score `0.6423`, normalized CER `0.3156` | speed path |
 | beam5 VAD on | `--stt-beam-size 5`, VAD on | fixed smoke avg `5.191s` | score `0.6423`, normalized CER `0.3156` | beam/VAD 기본값 |
@@ -311,7 +312,7 @@ scripts/stt_codex.py --stt-model tiny --stt-device cpu --stt-compute-type int8 -
 - 실제 마이크 입력 품질이 낮으면 STT 결과가 크게 나빠진다. 장비 교체 후 `--save-run`으로 audio와 transcript를 같이 확인한다.
 - `Ctrl+T` PTT는 terminal key repeat에 의존한다. tmux나 terminal 설정에 따라 control sequence가 예상과 다를 수 있다.
 - `--inject-key t`는 smoke test에 유용하지만 일반 typing과 충돌하므로 기본값으로 쓰지 않는다.
-- `--ptt-profile speed`는 release gap을 `0.35s`로 낮춰 stop 판정을 빠르게 한다. 말 끝, 긴 모음, terminal key repeat pause가 겹치면 truncation risk가 커질 수 있다.
+- 기본 release gap `0.35s`는 stop 판정을 빠르게 한다. 말 끝, 긴 모음, terminal key repeat pause가 겹치면 truncation risk가 커질 수 있다. 더 긴 대기가 필요하면 `--release-gap 0.75`처럼 직접 지정한다.
 - 한영 혼합 문장에서 `session`, `bug`, 파일명, option name 같은 Latin token이 한글 외래어 표기로 바뀔 수 있다.
 - wrapper 기본 흐름은 token recovery, personal vocabulary, workspace metadata 기반 복원을 수행하지 않는다.
 - STT 실행 중에는 wrapper event loop가 잠시 block될 수 있다.

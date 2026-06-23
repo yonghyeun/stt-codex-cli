@@ -149,26 +149,26 @@ renderer는 기본적으로 `evals/stt_accuracy/metric_contract.json`을 읽어 
 source metric, direction, failure type 설명을 출력한다. 다른 contract 검증이 필요할 때만
 `--metric-contract <path>`를 사용한다.
 
-## PTT Release Gap Speed Profile Report
+## PTT Release Gap Contract
 
-`#33` PTT speed profile은 STT model이나 transcript policy가 아니라 녹음 stop 판정
-대기시간만 바꾼다.
+`#33`의 PTT release-gap preset은 STT model이나 transcript policy가 아니라 녹음 stop
+판정 대기시간만 바꿨다. `#43` 이후 사용자-facing 설정은 preset이 아니라
+`release gap` 단일 값이다.
 
 ```bash
-scripts/stt_codex.py --ptt-profile accuracy
-scripts/stt_codex.py --ptt-profile speed
-scripts/stt_codex.py --ptt-profile speed --release-gap 0.5
-STT_PTT_PROFILE=speed scripts/stt_codex.py
+scripts/stt_codex.py
+scripts/stt_codex.py --release-gap 0.5
 STT_PTT_RELEASE_GAP=0.5 scripts/stt_codex.py
 ```
 
-- 기본 profile은 `accuracy`다.
-- `accuracy` release gap은 `0.75s`다.
-- `speed` release gap은 `0.35s`다.
-- deterministic stop-wait delta는 `0.75s -> 0.35s`, 즉 `-0.40s`다.
-- 직접 지정한 `--release-gap` 또는 `STT_PTT_RELEASE_GAP`이 profile보다 우선한다.
+- 기본 release gap은 `0.35s`다.
+- `--release-gap` 또는 `STT_PTT_RELEASE_GAP`으로 stop 판정 대기시간을 직접 지정한다.
+- 이전 `accuracy` profile의 값은 `0.75s`였다. 같은 동작이 필요하면 `--release-gap 0.75`를 사용한다.
+- 이전 `speed` profile의 값은 `0.35s`였고, 현재 기본값과 같다.
+- 우선순위는 `--release-gap`, `STT_PTT_RELEASE_GAP`, 기본값 순서다.
+- `--ptt-profile`과 `STT_PTT_PROFILE`은 더 이상 설정 surface가 아니다.
 - Enter 자동 전송은 없다. transcript 삽입 뒤 사용자가 직접 확인하고 전송한다.
-- Fixed smoke STT는 이 leaf에서 재측정하지 않았다. 이유는 release-gap profile이
+- Fixed smoke STT는 이 계약 변경에서 재측정하지 않는다. 이유는 release-gap이
   CLI/env stop timing 선택만 바꾸기 때문이다.
 - Report 위치: `evals/stt_accuracy/reports/2026-06-23-release-gap-speed-profile.md`.
 
@@ -256,14 +256,14 @@ scripts/evaluate_beam_vad_tradeoff.py \
 - Full suite는 미측정이다. `beam1-vad-on`은 fixed-smoke-only 후보이지 기본값이 아니다.
 - Report 위치: `evals/stt_accuracy/reports/2026-06-23-beam-vad-tradeoff.md`.
 
-## Speed Profile Tradeoff Summary
+## Speed/Accuracy Tradeoff Summary
 
-사용자-facing 기본값은 정확도 우선이다. Speed 관련 option은 모두 명시 opt-in이다.
+사용자-facing PTT 기본 release gap은 `0.35s`다. 더 긴 stop 판정 대기는 명시 opt-in이다.
 
 | surface | command/config | measured delta | quality | status |
 | --- | --- | ---: | ---: | --- |
-| default PTT | `scripts/stt_codex.py` | release gap `0.75s` | 기본값 | default |
-| PTT speed | `scripts/stt_codex.py --ptt-profile speed` | stop-wait `-0.40s` | live truncation 미측정 | opt-in |
+| default PTT | `scripts/stt_codex.py` | release gap `0.35s` | live truncation 미측정 | default |
+| longer PTT wait | `scripts/stt_codex.py --release-gap 0.75` | stop-wait `+0.40s` | live truncation 미측정 | opt-in |
 | worker file | `scripts/stt_codex.py --stt-backend worker --audio-handoff file` | #29 대비 `-3.337s` | score `0.6423`, CER `0.3156` | speed path |
 | worker buffer | `scripts/stt_codex.py --stt-backend worker --audio-handoff buffer` | #29 대비 `-3.420s`, worker file 대비 `-0.083s` | score `0.6423`, CER `0.3156` | speed path |
 | beam1 VAD on | `scripts/stt_codex.py --stt-beam-size 1` | default 대비 `-0.018s`, #29 대비 `-0.783s` | score `0.6423`, CER `0.3156` | fixed-smoke-only 후보 |
@@ -540,30 +540,28 @@ scripts/stt_codex.py --stt-model large-v3 --stt-device cuda --stt-compute-type f
 scripts/stt_codex.py --stt-model tiny --stt-device cpu --stt-compute-type int8 --cmd python3 -- -q
 ```
 
-PTT speed profile:
+PTT release gap 직접 지정:
 
 ```bash
-scripts/stt_codex.py --ptt-profile speed
+scripts/stt_codex.py --release-gap 0.75
 ```
 
 - STT mode 기본 trigger는 `ctrl+t`다.
 - `ctrl+t`는 child PTY로 전달되지 않고 parent가 소비한다.
 - `--inject-key t`처럼 trigger를 바꿀 수 있다.
-- `--ptt-profile`은 release gap profile이다. 기본값은 `accuracy`다.
-- `accuracy` profile release gap은 `0.75s`다.
-- `speed` profile release gap은 `0.35s`다.
-- `STT_PTT_PROFILE=speed`로 speed profile을 기본 선택할 수 있다.
 - `--release-gap`은 trigger 반복 입력이 끊긴 뒤 녹음을 종료할 때까지 기다리는 시간을 직접 지정한다.
-- 우선순위는 `--release-gap` / `STT_PTT_RELEASE_GAP` > `--ptt-profile` / `STT_PTT_PROFILE` > `accuracy` default다.
-- `speed` profile의 deterministic wait delta는 `0.75s -> 0.35s`, 즉 `-0.40s`다.
-- release gap을 낮추면 말 끝 truncation risk가 커질 수 있다.
+- 기본 release gap은 `0.35s`다.
+- 우선순위는 `--release-gap` / `STT_PTT_RELEASE_GAP` > 기본값 순서다.
+- `--ptt-profile`과 `STT_PTT_PROFILE`은 더 이상 설정 surface가 아니다.
+- 이전 `accuracy` profile과 같은 대기가 필요하면 `--release-gap 0.75`를 사용한다.
+- release gap이 짧으면 말 끝 truncation risk가 커질 수 있다.
 - `--stt-backend worker --audio-handoff buffer`는 persistent worker request path의
   speed path다. Fixed smoke 평균은 `2.536s`이고 #29 subprocess 평균 `5.956s`
   대비 `-3.420s`다.
 - `--stt-beam-size 1`은 VAD on일 때 fixed smoke 평균 `5.173s`로 default
   `beam5-vad-on` `5.191s` 대비 `-0.018s`였다. Full suite 미측정이므로
   fixed-smoke-only 후보로만 다룬다.
-- `--stt-no-vad-filter`는 speed profile로 쓰지 않는다. VAD off는 score `0.6233`,
+- `--stt-no-vad-filter`는 speed path로 쓰지 않는다. VAD off는 score `0.6233`,
   normalized CER `0.3394`, `cmd-0002` floor 실패로 제외한다.
 - `--min-duration`보다 짧은 녹음은 STT 없이 버린다.
 - `--max-duration`을 넘으면 자동으로 녹음을 종료한다.
