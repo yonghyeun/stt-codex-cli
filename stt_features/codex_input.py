@@ -317,6 +317,22 @@ def handle_stdin_data(
     )
 
 
+def maybe_report_recording_progress(
+    *,
+    args: object,
+    state: RecordingState,
+    status: StatusFn,
+) -> None:
+    elapsed = state.elapsed()
+    elapsed_second = int(elapsed)
+    if state.last_progress_second == elapsed_second:
+        return
+    state.last_progress_second = elapsed_second
+    status(
+        f"recording progress: elapsed={elapsed:.2f}s max={args.max_duration:g}s"
+    )
+
+
 def maybe_finish_stt_recording(
     *,
     args: object,
@@ -349,6 +365,11 @@ def maybe_finish_stt_recording(
         return
     if getattr(args, "trigger_mode", "tap") == "tap":
         if not state.stop_requested:
+            maybe_report_recording_progress(
+                args=args,
+                state=state,
+                status=status,
+            )
             return
         try:
             finish_recording_and_inject(
@@ -365,6 +386,11 @@ def maybe_finish_stt_recording(
             status(f"stt error: {error}")
         return
     if state.last_trigger_at is None:
+        maybe_report_recording_progress(
+            args=args,
+            state=state,
+            status=status,
+        )
         return
 
     elapsed_since_trigger = time.monotonic() - state.last_trigger_at
@@ -382,6 +408,12 @@ def maybe_finish_stt_recording(
             )
         except RuntimeError as error:
             status(f"stt error: {error}")
+        return
+    maybe_report_recording_progress(
+        args=args,
+        state=state,
+        status=status,
+    )
 
 
 def passthrough(
