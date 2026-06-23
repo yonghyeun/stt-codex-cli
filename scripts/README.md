@@ -160,27 +160,29 @@ renderer는 기본적으로 `evals/stt_accuracy/metric_contract.json`을 읽어 
 source metric, direction, failure type 설명을 출력한다. 다른 contract 검증이 필요할 때만
 `--metric-contract <path>`를 사용한다.
 
-## PTT Release Gap Contract
+## Legacy Hold Release Gap Contract
 
 `#33`의 PTT release-gap preset은 STT model이나 transcript policy가 아니라 녹음 stop
-판정 대기시간만 바꿨다. `#43` 이후 사용자-facing 설정은 preset이 아니라
-`release gap` 단일 값이다.
+판정 대기시간만 바꿨다. `#43` 이후 preset은 제거됐고, `#47` 이후 기본 trigger UX는
+`tap`이다. `release gap`은 legacy `hold` trigger mode에서만 사용자-facing stop
+판정 값이다.
 
 ```bash
 scripts/stt_codex.py
-scripts/stt_codex.py --release-gap 0.5
-STT_PTT_RELEASE_GAP=0.5 scripts/stt_codex.py
+scripts/stt_codex.py --trigger-mode hold --release-gap 0.5
+STT_TRIGGER_MODE=hold STT_PTT_RELEASE_GAP=0.5 scripts/stt_codex.py
 ```
 
-- 기본 release gap은 `0.35s`다.
-- `--release-gap` 또는 `STT_PTT_RELEASE_GAP`으로 stop 판정 대기시간을 직접 지정한다.
-- 이전 `accuracy` profile의 값은 `0.75s`였다. 같은 동작이 필요하면 `--release-gap 0.75`를 사용한다.
-- 이전 `speed` profile의 값은 `0.35s`였고, 현재 기본값과 같다.
-- 우선순위는 `--release-gap`, `STT_PTT_RELEASE_GAP`, 기본값 순서다.
+- 기본 trigger mode는 `tap`이다.
+- hold mode 기본 release gap은 `0.35s`다.
+- `--trigger-mode hold`에서만 `--release-gap` 또는 `STT_PTT_RELEASE_GAP`으로 stop 판정 대기시간을 직접 지정한다.
+- 이전 `accuracy` profile의 값은 `0.75s`였다. 같은 동작이 필요하면 `--trigger-mode hold --release-gap 0.75`를 사용한다.
+- 이전 `speed` profile의 값은 `0.35s`였고, hold mode 기본값과 같다.
+- hold mode 우선순위는 `--release-gap`, `STT_PTT_RELEASE_GAP`, 기본값 순서다.
 - `--ptt-profile`과 `STT_PTT_PROFILE`은 더 이상 설정 surface가 아니다.
 - Enter 자동 전송은 없다. transcript 삽입 뒤 사용자가 직접 확인하고 전송한다.
 - Fixed smoke STT는 이 계약 변경에서 재측정하지 않는다. 이유는 release-gap이
-  CLI/env stop timing 선택만 바꾸기 때문이다.
+  hold mode CLI/env stop timing 선택만 바꾸기 때문이다.
 - Report 위치: `evals/stt_accuracy/reports/2026-06-23-release-gap-speed-profile.md`.
 
 ## Audio Handoff Latency Harness
@@ -269,14 +271,14 @@ scripts/evaluate_beam_vad_tradeoff.py \
 
 ## Speed/Accuracy Tradeoff Summary
 
-사용자-facing 기본 runtime은 `release gap 0.35s`, `worker` backend, `audio-handoff auto`다.
-저장/debug option이 꺼져 있으면 기본 handoff는 buffer다. 더 긴 stop 판정 대기와 file/subprocess
-path는 명시 opt-in이다.
+사용자-facing 기본 runtime은 `trigger-mode tap`, `worker` backend, `audio-handoff auto`다.
+저장/debug option이 꺼져 있으면 기본 handoff는 buffer다. legacy hold stop 판정 대기와
+file/subprocess path는 명시 opt-in이다.
 
 | surface | command/config | measured delta | quality | status |
 | --- | --- | ---: | ---: | --- |
-| default runtime | `scripts/stt_codex.py` | release gap `0.35s`, worker buffer avg `2.536s` | fixed smoke score `0.6423`, CER `0.3156` | default |
-| longer PTT wait | `scripts/stt_codex.py --release-gap 0.75` | stop-wait `+0.40s` | live truncation 미측정 | opt-in |
+| default runtime | `scripts/stt_codex.py` | tap stop, worker buffer avg `2.536s` | fixed smoke score `0.6423`, CER `0.3156` | default |
+| legacy hold wait | `scripts/stt_codex.py --trigger-mode hold --release-gap 0.75` | stop-wait `+0.40s` | live truncation 미측정 | opt-in |
 | worker file | `scripts/stt_codex.py --audio-handoff file` | #29 대비 `-3.337s` | score `0.6423`, CER `0.3156` | file override |
 | worker buffer | `scripts/stt_codex.py` 또는 `--audio-handoff buffer` | #29 대비 `-3.420s`, worker file 대비 `-0.083s` | score `0.6423`, CER `0.3156` | default request path |
 | beam1 VAD on | `scripts/stt_codex.py --stt-beam-size 1` | default 대비 `-0.018s`, #29 대비 `-0.783s` | score `0.6423`, CER `0.3156` | fixed-smoke-only 후보 |
@@ -302,10 +304,10 @@ Floor와 report 위치:
 | --- | --- | --- |
 | load-time | `--stt-model`, `--stt-device`, `--stt-compute-type`, `--stt-backend` | model load 비용과 worker process 수명에 영향을 준다. 기본 backend는 `worker`다. |
 | decode-time | `--stt-beam-size`, `--stt-no-vad-filter`, `--stt-initial-prompt`, `--stt-language` | 이미 녹음된 audio를 transcript로 바꾸는 decoding 정책이다. |
-| runtime/backend | `--release-gap`, `--min-duration`, `--max-duration`, `--audio-handoff` | PTT stop timing, 녹음 길이 guard, audio handoff 방식을 바꾼다. |
+| runtime/backend | `--trigger-mode`, `--release-gap`, `--min-duration`, `--max-duration`, `--audio-handoff` | 녹음 stop timing, 녹음 길이 guard, audio handoff 방식을 바꾼다. |
 | artifact/debug | `--save-run`, `--keep-audio`, `--run-output-dir`, `--temp-dir` | run artifact와 임시 audio 보존 정책이다. |
 
-`--release-gap`은 PTT runtime option이다. `worker` backend와 buffer handoff는
+`--trigger-mode tap`이 기본 runtime stop timing 정책이다. `--release-gap`은 legacy hold mode runtime option이다. `worker` backend와 buffer handoff는
 공통 runtime 기본값이다. `--stt-backend subprocess`와 `--audio-handoff file`은
 명시 override다. `--stt-beam-size`와 VAD 설정은 decode-time option이다.
 
@@ -520,6 +522,7 @@ scripts/stt_codex.py --cmd python3 -- -q
 - `--inject-mode fixed-text`로 고정 텍스트 injection을 테스트할 수 있다.
 - `--inject-text`로 child PTY에 삽입할 고정 텍스트를 바꾼다.
 - `--inject-key`로 삽입 trigger key를 바꾼다.
+- `--trigger-mode tap`이 STT mode 기본값이다. 첫 trigger는 녹음을 시작하고 다음 trigger는 녹음을 종료한다.
 - `--disable-inject-key`를 주면 모든 stdin을 child PTY로 그대로 전달한다.
 - injection은 텍스트만 삽입하며 Enter는 보내지 않는다.
 - Codex CLI 자동 전송은 하지 않는다.
@@ -550,7 +553,7 @@ scripts/stt_codex.py --inject-mode fixed-text --cmd python3 -- -c 'import sys; p
 
 ## Prototype 15: STT Transcript Injection
 
-기본 mode다. `Ctrl+T`를 누르고 말하면 녹음하고, `Ctrl+T` 반복 입력이 끊긴 뒤 STT raw transcript를 child PTY 입력창에 삽입한다.
+기본 mode다. `Ctrl+T`를 한 번 눌러 녹음을 시작하고, 말을 끝낸 뒤 `Ctrl+T`를 다시 한 번 눌러 녹음을 종료한다. 종료 뒤 STT raw transcript를 child PTY 입력창에 삽입한다.
 
 ```bash
 scripts/stt_codex.py
@@ -568,21 +571,25 @@ scripts/stt_codex.py --stt-model large-v3 --stt-device cuda --stt-compute-type f
 scripts/stt_codex.py --stt-model tiny --stt-device cpu --stt-compute-type int8 --cmd python3 -- -q
 ```
 
-PTT release gap 직접 지정:
+legacy hold trigger mode와 release gap 직접 지정:
 
 ```bash
-scripts/stt_codex.py --release-gap 0.75
+scripts/stt_codex.py --trigger-mode hold --release-gap 0.75
 ```
 
 - STT mode 기본 trigger는 `ctrl+t`다.
 - `ctrl+t`는 child PTY로 전달되지 않고 parent가 소비한다.
+- 기본 trigger mode는 `tap`이다.
+- `tap` mode에서 첫 `ctrl+t`는 녹음을 시작하고 다음 `ctrl+t`는 녹음을 종료한다.
+- 녹음 중 status bar는 `STT recording 중 | Ctrl+T stop`으로 표시된다.
 - `--inject-key t`처럼 trigger를 바꿀 수 있다.
-- `--release-gap`은 trigger 반복 입력이 끊긴 뒤 녹음을 종료할 때까지 기다리는 시간을 직접 지정한다.
-- 기본 release gap은 `0.35s`다.
-- 우선순위는 `--release-gap` / `STT_PTT_RELEASE_GAP` > 기본값 순서다.
+- `--trigger-mode hold`는 이전 hold/repeat PTT 동작을 유지한다.
+- `--release-gap`은 `hold` mode에서 trigger 반복 입력이 끊긴 뒤 녹음을 종료할 때까지 기다리는 시간을 직접 지정한다.
+- hold mode 기본 release gap은 `0.35s`다.
+- hold mode 우선순위는 `--release-gap` / `STT_PTT_RELEASE_GAP` > 기본값 순서다.
 - `--ptt-profile`과 `STT_PTT_PROFILE`은 더 이상 설정 surface가 아니다.
-- 이전 `accuracy` profile과 같은 대기가 필요하면 `--release-gap 0.75`를 사용한다.
-- release gap이 짧으면 말 끝 truncation risk가 커질 수 있다.
+- 이전 `accuracy` profile과 같은 대기가 필요하면 `--trigger-mode hold --release-gap 0.75`를 사용한다.
+- hold mode에서 release gap이 짧으면 말 끝 truncation risk가 커질 수 있다.
 - 기본 runtime은 `--stt-backend worker --audio-handoff auto`다. 저장/debug option이
   꺼져 있으면 buffer handoff를 사용한다. Fixed smoke 평균은 `2.536s`이고
   #29 subprocess 평균 `5.956s` 대비 `-3.420s`다.

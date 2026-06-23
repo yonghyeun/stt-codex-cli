@@ -255,6 +255,7 @@ def handle_stt_ptt_input(
         return
 
     trigger = args.inject_key_bytes
+    trigger_mode = getattr(args, "trigger_mode", "tap")
     start = 0
     while True:
         index = data.find(trigger, start)
@@ -273,7 +274,10 @@ def handle_stt_ptt_input(
                 status=status,
                 handoff=resolve_audio_handoff(args),
             )
-        state.last_trigger_at = time.monotonic()
+        elif trigger_mode == "tap":
+            state.stop_requested = True
+        else:
+            state.last_trigger_at = time.monotonic()
         start = index + len(trigger)
 
 
@@ -313,10 +317,9 @@ def maybe_finish_stt_recording(
     transcription_client: TranscriptionClient,
     transcription_config: TranscriptionConfig,
 ) -> None:
-    if not state.active() or state.last_trigger_at is None:
+    if not state.active():
         return
 
-    elapsed_since_trigger = time.monotonic() - state.last_trigger_at
     if state.elapsed() >= args.max_duration:
         status(f"max duration reached: {args.max_duration:g}s")
         try:
@@ -333,6 +336,27 @@ def maybe_finish_stt_recording(
         except RuntimeError as error:
             status(f"stt error: {error}")
         return
+    if getattr(args, "trigger_mode", "tap") == "tap":
+        if not state.stop_requested:
+            return
+        try:
+            finish_recording_and_inject(
+                args=args,
+                repo_root=repo_root,
+                child_fd=child_fd,
+                child_command=child_command,
+                state=state,
+                status=status,
+                transcription_client=transcription_client,
+                transcription_config=transcription_config,
+            )
+        except RuntimeError as error:
+            status(f"stt error: {error}")
+        return
+    if state.last_trigger_at is None:
+        return
+
+    elapsed_since_trigger = time.monotonic() - state.last_trigger_at
     if elapsed_since_trigger >= args.release_gap:
         try:
             finish_recording_and_inject(

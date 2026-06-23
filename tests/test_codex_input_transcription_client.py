@@ -7,6 +7,7 @@ import unittest
 from datetime import datetime, timezone
 from pathlib import Path
 from types import SimpleNamespace
+from unittest.mock import patch
 
 from stt_features import codex_input
 from stt_runtime.recording import RecordingState
@@ -54,6 +55,13 @@ def make_args(**overrides: object) -> SimpleNamespace:
         "stt_no_vad_filter": False,
         "stt_backend": "worker",
         "audio_handoff": "auto",
+        "inject_mode": "stt",
+        "disable_inject_key": False,
+        "inject_key_bytes": b"\x14",
+        "temp_dir": None,
+        "trigger_mode": "tap",
+        "max_duration": 60.0,
+        "release_gap": 0.35,
     }
     values.update(overrides)
     return SimpleNamespace(**values)
@@ -198,6 +206,127 @@ class CodexInputTranscriptionClientTest(unittest.TestCase):
         finally:
             os.close(write_fd)
             os.close(read_fd)
+
+    def test_tap_trigger_starts_recording_and_consumes_key(self) -> None:
+        state = RecordingState()
+        statuses: list[str] = []
+        read_fd, write_fd = os.pipe()
+
+        def fake_start_recording(**kwargs: object) -> None:
+            state.process = FinishedProcess()  # type: ignore[assignment]
+            state.started_at = time.monotonic()
+            state.last_trigger_at = state.started_at
+            kwargs["status"]("recording started: in-memory audio buffer")  # type: ignore[index,operator]
+
+        try:
+            with patch.object(codex_input, "start_recording", fake_start_recording):
+                codex_input.handle_stdin_data(
+                    args=make_args(),
+                    child_fd=write_fd,
+                    data=b"before\x14after",
+                    state=state,
+                    status=statuses.append,
+                )
+            os.close(write_fd)
+            write_fd = -1
+            forwarded = os.read(read_fd, 4096)
+        finally:
+            if write_fd >= 0:
+                os.close(write_fd)
+            os.close(read_fd)
+
+        self.assertTrue(state.active())
+        self.assertFalse(state.stop_requested)
+        self.assertEqual(forwarded, b"beforeafter")
+        self.assertIn("recording started: in-memory audio buffer", statuses)
+
+    def test_second_tap_requests_stop_without_forwarding_key(self) -> None:
+        state = RecordingState(
+            process=FinishedProcess(),  # type: ignore[arg-type]
+            started_at=time.monotonic() - 1.0,
+            last_trigger_at=time.monotonic() - 1.0,
+        )
+        read_fd, write_fd = os.pipe()
+
+        try:
+            codex_input.handle_stdin_data(
+                args=make_args(),
+                child_fd=write_fd,
+                data=b"\x14",
+                state=state,
+                status=lambda message: None,
+            )
+            os.close(write_fd)
+            write_fd = -1
+            forwarded = os.read(read_fd, 4096)
+        finally:
+            if write_fd >= 0:
+                os.close(write_fd)
+            os.close(read_fd)
+
+        self.assertTrue(state.stop_requested)
+        self.assertEqual(forwarded, b"")
+
+    def test_tap_mode_ignores_release_gap_until_stop_is_requested(self) -> None:
+        state = RecordingState(
+            process=FinishedProcess(),  # type: ignore[arg-type]
+            started_at=time.monotonic() - 2.0,
+            last_trigger_at=time.monotonic() - 2.0,
+        )
+        called = False
+
+        def fake_finish_recording_and_inject(**kwargs: object) -> None:
+            nonlocal called
+            called = True
+
+        with patch.object(
+            codex_input,
+            "finish_recording_and_inject",
+            fake_finish_recording_and_inject,
+        ):
+            codex_input.maybe_finish_stt_recording(
+                args=make_args(release_gap=0.01),
+                repo_root=Path.cwd(),
+                child_fd=-1,
+                child_command=["codex"],
+                state=state,
+                status=lambda message: None,
+                transcription_client=FakeTranscriptionClient(),
+                transcription_config=codex_input.transcription_config_from_args(make_args()),
+            )
+
+        self.assertFalse(called)
+
+    def test_tap_mode_finishes_when_stop_is_requested(self) -> None:
+        state = RecordingState(
+            process=FinishedProcess(),  # type: ignore[arg-type]
+            started_at=time.monotonic() - 1.0,
+            last_trigger_at=time.monotonic() - 1.0,
+            stop_requested=True,
+        )
+        called = False
+
+        def fake_finish_recording_and_inject(**kwargs: object) -> None:
+            nonlocal called
+            called = True
+
+        with patch.object(
+            codex_input,
+            "finish_recording_and_inject",
+            fake_finish_recording_and_inject,
+        ):
+            codex_input.maybe_finish_stt_recording(
+                args=make_args(),
+                repo_root=Path.cwd(),
+                child_fd=-1,
+                child_command=["codex"],
+                state=state,
+                status=lambda message: None,
+                transcription_client=FakeTranscriptionClient(),
+                transcription_config=codex_input.transcription_config_from_args(make_args()),
+            )
+
+        self.assertTrue(called)
 
 
 if __name__ == "__main__":

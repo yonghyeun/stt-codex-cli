@@ -108,6 +108,12 @@ class PttReleaseGapContractTest(unittest.TestCase):
         self.assertFalse(hasattr(args, "ptt_profile"))
         self.assertEqual(args.release_gap, stt_codex.DEFAULT_RELEASE_GAP)
         self.assertEqual(args.release_gap, 0.35)
+        self.assertEqual(args.trigger_mode, "tap")
+
+    def test_trigger_mode_can_select_legacy_hold_behavior(self) -> None:
+        args = self.parse_with(["--trigger-mode", "hold"])
+
+        self.assertEqual(args.trigger_mode, "hold")
 
     def test_ptt_profile_env_is_not_a_configuration_surface(self) -> None:
         args = self.parse_with(env={"STT_PTT_PROFILE": "accuracy"})
@@ -130,6 +136,11 @@ class PttReleaseGapContractTest(unittest.TestCase):
         )
 
         self.assertEqual(args.release_gap, 0.2)
+
+    def test_initial_stt_status_uses_tap_start_copy(self) -> None:
+        args = self.parse_with()
+
+        self.assertEqual(stt_codex.initial_parent_status(args), "STT idle | ctrl+t start")
 
 
 class RuntimeDefaultContractTest(unittest.TestCase):
