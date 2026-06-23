@@ -90,7 +90,7 @@ class InitialPromptDefaultTest(unittest.TestCase):
         )
 
 
-class PttReleaseGapProfileTest(unittest.TestCase):
+class PttReleaseGapContractTest(unittest.TestCase):
     def parse_with(
         self,
         argv: list[str] | None = None,
@@ -102,51 +102,70 @@ class PttReleaseGapProfileTest(unittest.TestCase):
         ):
             return stt_codex.parse_args()
 
-    def test_accuracy_profile_preserves_existing_release_gap_default(self) -> None:
+    def test_default_release_gap_uses_single_fast_stop_value(self) -> None:
         args = self.parse_with()
 
-        self.assertEqual(args.ptt_profile, "accuracy")
+        self.assertFalse(hasattr(args, "ptt_profile"))
         self.assertEqual(args.release_gap, stt_codex.DEFAULT_RELEASE_GAP)
-        self.assertEqual(args.release_gap, 0.75)
-
-    def test_speed_profile_uses_lower_release_gap(self) -> None:
-        args = self.parse_with(["--ptt-profile", "speed"])
-
-        self.assertEqual(args.ptt_profile, "speed")
         self.assertEqual(args.release_gap, 0.35)
 
-    def test_ptt_profile_env_selects_speed_release_gap(self) -> None:
-        args = self.parse_with(env={"STT_PTT_PROFILE": "speed"})
+    def test_ptt_profile_env_is_not_a_configuration_surface(self) -> None:
+        args = self.parse_with(env={"STT_PTT_PROFILE": "accuracy"})
 
-        self.assertEqual(args.ptt_profile, "speed")
         self.assertEqual(args.release_gap, 0.35)
 
-    def test_explicit_ptt_profile_overrides_profile_env(self) -> None:
-        args = self.parse_with(
-            argv=["--ptt-profile", "accuracy"],
-            env={"STT_PTT_PROFILE": "speed"},
-        )
+    def test_ptt_profile_cli_option_is_removed(self) -> None:
+        with self.assertRaises(SystemExit):
+            self.parse_with(["--ptt-profile", "speed"])
 
-        self.assertEqual(args.ptt_profile, "accuracy")
-        self.assertEqual(args.release_gap, 0.75)
+    def test_release_gap_env_overrides_default(self) -> None:
+        args = self.parse_with(env={"STT_PTT_RELEASE_GAP": "0.9"})
 
-    def test_release_gap_env_overrides_ptt_profile(self) -> None:
-        args = self.parse_with(
-            argv=["--ptt-profile", "speed"],
-            env={"STT_PTT_RELEASE_GAP": "0.9"},
-        )
-
-        self.assertEqual(args.ptt_profile, "speed")
         self.assertEqual(args.release_gap, 0.9)
 
-    def test_explicit_release_gap_overrides_env_and_profile(self) -> None:
+    def test_explicit_release_gap_overrides_env(self) -> None:
         args = self.parse_with(
-            argv=["--ptt-profile", "speed", "--release-gap", "0.2"],
+            argv=["--release-gap", "0.2"],
             env={"STT_PTT_RELEASE_GAP": "0.9"},
         )
 
-        self.assertEqual(args.ptt_profile, "speed")
         self.assertEqual(args.release_gap, 0.2)
+
+
+class RuntimeDefaultContractTest(unittest.TestCase):
+    def parse_with(
+        self,
+        argv: list[str] | None = None,
+        env: dict[str, str] | None = None,
+    ) -> argparse.Namespace:
+        with (
+            patch.object(sys, "argv", ["stt_codex.py", *(argv or [])]),
+            patch.dict(os.environ, env or {}, clear=True),
+        ):
+            return stt_codex.parse_args()
+
+    def test_default_runtime_uses_worker_and_buffer_handoff(self) -> None:
+        args = self.parse_with()
+
+        self.assertEqual(args.stt_backend, "worker")
+        self.assertEqual(args.audio_handoff, "auto")
+        self.assertEqual(stt_codex.resolve_audio_handoff(args), "buffer")
+
+    def test_save_or_debug_audio_preserves_file_handoff(self) -> None:
+        self.assertEqual(
+            stt_codex.resolve_audio_handoff(self.parse_with(["--save-run"])),
+            "file",
+        )
+        self.assertEqual(
+            stt_codex.resolve_audio_handoff(self.parse_with(["--keep-audio"])),
+            "file",
+        )
+
+    def test_subprocess_override_uses_file_handoff(self) -> None:
+        args = self.parse_with(["--stt-backend", "subprocess"])
+
+        self.assertEqual(args.stt_backend, "subprocess")
+        self.assertEqual(stt_codex.resolve_audio_handoff(args), "file")
 
 
 class RunArtifactTest(unittest.TestCase):

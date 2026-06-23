@@ -65,8 +65,10 @@ Boundary:
 Storage:
 
 - 녹음은 STT 처리를 위해 임시 WAV 파일 또는 in-memory WAV buffer로 만든다.
-- 기본 subprocess backend와 저장/debug 옵션은 file handoff를 사용한다.
-- worker backend에서 `--audio-handoff auto`이고 `--save-run`/`--keep-audio`가 꺼져 있으면 buffer handoff를 사용한다.
+- 기본 runtime은 persistent worker backend와 `--audio-handoff auto`다.
+- 기본 실행에서 `--save-run`/`--keep-audio`가 꺼져 있으면 buffer handoff를 사용한다.
+- `--save-run`/`--keep-audio` 또는 `--audio-handoff file`을 명시하면 file handoff를 사용한다.
+- `--stt-backend subprocess`를 명시하면 file handoff를 사용한다.
 - 임시 WAV는 기본 삭제한다.
 - `--save-run`을 명시한 경우에만 `output/runs/YYYYMMDD-HHMMSS-mmm-stt-codex/` 아래에 audio, transcript, metadata를 보존한다.
 - `--keep-audio`는 임시 WAV 자체를 남기는 debug option이다.
@@ -75,7 +77,7 @@ Storage:
 Current core scripts:
 
 - `scripts/stt_codex.py`: 현재 메인 entrypoint. CLI option과 backward-compatible wrapper surface를 담당한다.
-- `scripts/transcribe.sh`: venv/CUDA library path를 준비하고 `transcribe.py`를 subprocess로 실행한다.
+- `scripts/transcribe.sh`: 현재 또는 main worktree venv와 CUDA library path를 준비하고 `transcribe.py`를 subprocess로 실행한다.
 - `scripts/transcribe.py`: faster-whisper STT 실행을 담당한다.
 - `scripts/transcribe_worker.sh`, `scripts/transcribe_worker.py`: wrapper session 안에서 faster-whisper model을 한 번 load하고 WAV path 또는 in-memory WAV buffer request를 반복 처리하는 persistent worker를 담당한다.
 - `scripts/run_fixture_suite.sh`, `scripts/run_fixture_suite.py`: fixture regression을 담당한다.
@@ -199,42 +201,46 @@ scripts/stt_codex.py
 scripts/stt_codex.py --stt-model large-v3 --stt-device cuda --stt-compute-type float16
 ```
 
-persistent worker와 buffer handoff를 명시:
+기본 runtime은 persistent worker와 buffer handoff다:
 
 ```bash
-scripts/stt_codex.py --stt-backend worker --audio-handoff buffer
+scripts/stt_codex.py
 ```
 
-`--audio-handoff auto`는 worker backend에서 저장/debug audio option이 꺼진 경우에만 buffer를 사용한다. `--save-run` 또는 `--keep-audio`가 켜지면 file handoff로 돌아가 audio 보존 계약을 우선한다.
+`--stt-backend worker`가 기본값이고, `--audio-handoff auto`는 저장/debug audio option이 꺼진 경우 buffer를 사용한다. `--save-run` 또는 `--keep-audio`가 켜지면 file handoff로 돌아가 audio 보존 계약을 우선한다. subprocess fallback이 필요하면 `--stt-backend subprocess`를 명시한다.
 
-PTT speed profile을 명시:
+STT launcher는 `STT_PYTHON_BIN`을 명시하면 그 Python을 최우선으로 사용한다. 명시값이 없으면 현재 worktree의 `.venv`를 먼저 찾고, 없으면 `git worktree` 기준 main/primary worktree의 `.venv`를 fallback으로 사용한다. 따라서 issue worktree에서 실행해도 main workspace의 준비된 venv를 재사용할 수 있다.
+
+PTT release gap을 직접 지정:
 
 ```bash
-scripts/stt_codex.py --ptt-profile speed
+scripts/stt_codex.py --release-gap 0.75
 ```
 
-기본 `accuracy` profile의 release gap은 `0.75s`다. `speed` profile의 release gap은 `0.35s`다. Trigger 반복 입력이 끊긴 뒤 stop 판정까지의 deterministic wait delta는 `0.75s -> 0.35s`, 즉 `-0.40s`다.
+기본 release gap은 `0.35s`다. Trigger 반복 입력이 끊긴 뒤 stop 판정까지의 대기 시간을 더 길게 두고 싶으면 `--release-gap` 또는 `STT_PTT_RELEASE_GAP`으로 값을 직접 지정한다.
 
-직접 지정한 release gap은 profile보다 우선한다.
+우선순위는 CLI 인자, 환경변수, 기본값 순서다.
 
 ```bash
-scripts/stt_codex.py --ptt-profile speed --release-gap 0.5
-STT_PTT_PROFILE=speed scripts/stt_codex.py
+scripts/stt_codex.py --release-gap 0.5
 STT_PTT_RELEASE_GAP=0.5 scripts/stt_codex.py
 ```
 
+Migration note: `--ptt-profile`과 `STT_PTT_PROFILE`은 더 이상 설정 surface가 아니다. 이전 `speed` 값은 새 기본값 `0.35s`와 같다. 이전 `accuracy` 값이 필요하면 `--release-gap 0.75` 또는 `STT_PTT_RELEASE_GAP=0.75`를 사용한다.
+
 ### Speed/Accuracy Decision Surface
 
-기본값은 정확도 우선이다. `scripts/stt_codex.py` 기본 실행은 `--ptt-profile accuracy`,
-`--stt-beam-size 5`, VAD on, `--stt-backend subprocess` 기준이다. Speed path는
-명시적으로 켠다.
+기본값은 `release gap 0.35s`, `--stt-backend worker`, `--audio-handoff auto`,
+`--stt-beam-size 5`, VAD on 기준이다. 기본 실행은 worker session에서 model을
+한 번 load하고, 저장/debug option이 꺼진 경우 buffer handoff를 사용한다. 더 긴 PTT
+stop 판정 대기는 `--release-gap`으로 명시한다.
 
 | 선택 | 현재 command/config | latency evidence | accuracy evidence | 결정 |
 | --- | --- | ---: | ---: | --- |
-| 기본 PTT | `--ptt-profile accuracy` 또는 생략 | release gap `0.75s` | release-gap leaf에서 STT 재측정 없음 | 기본값 |
-| PTT speed | `--ptt-profile speed` | stop-wait `0.75s -> 0.35s`, deterministic delta `-0.40s` | live truncation 미측정 | opt-in |
-| worker file | `--stt-backend worker --audio-handoff file` | fixed smoke avg `2.619s`, #29 subprocess `5.956s` 대비 `-3.337s` | score `0.6423`, normalized CER `0.3156` | speed path |
-| worker buffer | `--stt-backend worker --audio-handoff buffer` | fixed smoke avg `2.536s`, #29 대비 `-3.420s`, worker file 대비 `-0.083s` | score `0.6423`, normalized CER `0.3156` | speed path |
+| 기본 runtime | 생략 | release gap `0.35s`, worker buffer avg `2.536s` | fixed smoke score `0.6423`, normalized CER `0.3156` | 기본값 |
+| 긴 PTT stop wait | `--release-gap 0.75` | stop-wait `0.35s -> 0.75s`, deterministic delta `+0.40s` | live truncation 미측정 | opt-in |
+| worker file | `--audio-handoff file` | fixed smoke avg `2.619s`, #29 subprocess `5.956s` 대비 `-3.337s` | score `0.6423`, normalized CER `0.3156` | file override |
+| worker buffer | `--audio-handoff buffer` 또는 기본 `auto` | fixed smoke avg `2.536s`, #29 대비 `-3.420s`, worker file 대비 `-0.083s` | score `0.6423`, normalized CER `0.3156` | 기본 request path |
 | beam5 VAD on | `--stt-beam-size 5`, VAD on | fixed smoke avg `5.191s` | score `0.6423`, normalized CER `0.3156` | beam/VAD 기본값 |
 | beam1 VAD on | `--stt-beam-size 1` | avg `5.173s`, default `5.191s` 대비 `-0.018s`, #29 대비 `-0.783s` | score `0.6423`, normalized CER `0.3156` | fixed-smoke-only 후보 |
 | VAD off | `--stt-no-vad-filter` | avg `5.334s`/`5.111s` | score `0.6233`, normalized CER `0.3394`, `cmd-0002` floor 실패 | 제외 |
@@ -244,8 +250,22 @@ Fixed smoke latency input은 `evals/inputs/speech/v1`의 `cmd-0002`, `cmd-0018`,
 latency는 persistent worker request wall time이며 live `arecord` stop latency,
 child PTY injection latency, terminal render latency를 포함하지 않는다.
 
+### Option Taxonomy
+
+STT wrapper option은 profile로 묶지 않는다. 각 option은 바꾸는 계층이 다르다.
+
+| 분류 | options | 의미 |
+| --- | --- | --- |
+| load-time | `--stt-model`, `--stt-device`, `--stt-compute-type`, `--stt-backend` | model load와 실행 process 수명에 영향을 준다. 기본 backend는 `worker`다. |
+| decode-time | `--stt-beam-size`, `--stt-no-vad-filter`, `--stt-initial-prompt`, `--stt-language` | 같은 audio를 transcript로 바꾸는 STT decoding 정책이다. |
+| runtime/backend | `--release-gap`, `--min-duration`, `--max-duration`, `--audio-handoff` | 녹음 stop 판정, 녹음 길이 guard, audio 전달 방식을 바꾼다. |
+| artifact/debug | `--save-run`, `--keep-audio`, `--run-output-dir`, `--temp-dir` | 저장과 debugging 산출물 정책이다. |
+
+`--release-gap`은 runtime stop timing option이다. worker backend와 buffer handoff는
+공통 runtime 기본값이다. beam/VAD와 model option은 별도 decode/load-time 정책이다.
+
 #28 closeout의 최종 latency/accuracy 요약 위치는 이 section과
-`scripts/README.md`의 speed tradeoff section이다. 세부 evidence report는
+`scripts/README.md`의 `Speed/Accuracy Tradeoff Summary`다. 세부 evidence report는
 `evals/stt_accuracy/reports/2026-06-23-buffer-handoff.md`,
 `evals/stt_accuracy/reports/2026-06-23-release-gap-speed-profile.md`,
 `evals/stt_accuracy/reports/2026-06-23-beam-vad-tradeoff.md`에 둔다. Report와
@@ -311,11 +331,11 @@ scripts/stt_codex.py --stt-model tiny --stt-device cpu --stt-compute-type int8 -
 - 실제 마이크 입력 품질이 낮으면 STT 결과가 크게 나빠진다. 장비 교체 후 `--save-run`으로 audio와 transcript를 같이 확인한다.
 - `Ctrl+T` PTT는 terminal key repeat에 의존한다. tmux나 terminal 설정에 따라 control sequence가 예상과 다를 수 있다.
 - `--inject-key t`는 smoke test에 유용하지만 일반 typing과 충돌하므로 기본값으로 쓰지 않는다.
-- `--ptt-profile speed`는 release gap을 `0.35s`로 낮춰 stop 판정을 빠르게 한다. 말 끝, 긴 모음, terminal key repeat pause가 겹치면 truncation risk가 커질 수 있다.
+- 기본 release gap `0.35s`는 stop 판정을 빠르게 한다. 말 끝, 긴 모음, terminal key repeat pause가 겹치면 truncation risk가 커질 수 있다. 더 긴 대기가 필요하면 `--release-gap 0.75`처럼 직접 지정한다.
 - 한영 혼합 문장에서 `session`, `bug`, 파일명, option name 같은 Latin token이 한글 외래어 표기로 바뀔 수 있다.
 - wrapper 기본 흐름은 token recovery, personal vocabulary, workspace metadata 기반 복원을 수행하지 않는다.
 - STT 실행 중에는 wrapper event loop가 잠시 block될 수 있다.
-- Buffer handoff는 persistent worker request path의 file read/write 비용을 줄이기 위한 speed path다. `--save-run`과 `--keep-audio`는 file handoff를 사용한다.
+- Buffer handoff는 기본 worker request path다. file handoff가 필요하면 `--audio-handoff file`, `--save-run`, `--keep-audio` 중 하나를 명시한다.
 - `--save-run`은 실제 발화 audio와 transcript를 파일로 남긴다. 외부 공유 전 `output/` 확인이 필요하다.
 
 ## E2E Test Gate
@@ -380,7 +400,8 @@ E2E는 사용자가 실제 장비로 발화한 뒤 확인한다.
 - 녹음본과 transcript는 기본적으로 영구 저장하지 않는다.
 - 명시적 저장 옵션을 켰을 때만 run artifact를 남긴다.
 - raw 입력 mode와 manual token recovery script는 서로 분리되어 있다.
-- 기본 STT backend는 subprocess다. `scripts/stt_codex.py --stt-backend worker`를 명시하면 wrapper session 안에서 persistent worker를 사용한다.
+- 기본 STT backend는 worker다. wrapper session 안에서 model을 한 번 load하고 request를 반복 처리한다. `scripts/stt_codex.py --stt-backend subprocess`를 명시하면 이전 subprocess path를 사용할 수 있다.
+- STT launcher는 현재 worktree `.venv`가 없으면 main/primary worktree `.venv`를 자동 fallback으로 사용한다.
 
 ## Repository Shape
 

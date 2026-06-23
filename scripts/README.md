@@ -23,10 +23,13 @@ CUDA 실행이 필요하면 추가 설치한다.
 .venv/bin/pip install -r requirements-cuda.txt
 ```
 
-`scripts/transcribe.sh`는 venv에 설치된 CUDA library path를 자동으로 `LD_LIBRARY_PATH`에 추가한다.
+`scripts/transcribe.sh`와 `scripts/transcribe_worker.sh`는 venv에 설치된 CUDA library
+path를 자동으로 `LD_LIBRARY_PATH`에 추가한다.
 
 분리된 worktree에서 이미 준비된 venv를 재사용해야 하면 환경변수로 Python과
-site-packages 위치를 지정할 수 있다. 기본값은 repo root의 `.venv`다.
+site-packages 위치를 지정할 수 있다. 명시값이 없으면 현재 worktree `.venv`를
+먼저 찾고, 없으면 `git worktree` 기준 main/primary worktree의 `.venv`를 fallback으로
+사용한다.
 
 ```bash
 STT_PYTHON_BIN=/path/to/.venv/bin/python \
@@ -60,7 +63,7 @@ ${HOME}/stt-codex-cli
 ```bash
 codex-stt
 codex-stt --stt-model large-v3 --stt-device cuda --stt-compute-type float16
-codex-stt --stt-backend worker --audio-handoff buffer
+codex-stt --stt-backend subprocess
 ```
 
 repo가 기본 위치가 아닌 곳에 있으면 runtime override를 사용한다.
@@ -149,26 +152,26 @@ renderer는 기본적으로 `evals/stt_accuracy/metric_contract.json`을 읽어 
 source metric, direction, failure type 설명을 출력한다. 다른 contract 검증이 필요할 때만
 `--metric-contract <path>`를 사용한다.
 
-## PTT Release Gap Speed Profile Report
+## PTT Release Gap Contract
 
-`#33` PTT speed profile은 STT model이나 transcript policy가 아니라 녹음 stop 판정
-대기시간만 바꾼다.
+`#33`의 PTT release-gap preset은 STT model이나 transcript policy가 아니라 녹음 stop
+판정 대기시간만 바꿨다. `#43` 이후 사용자-facing 설정은 preset이 아니라
+`release gap` 단일 값이다.
 
 ```bash
-scripts/stt_codex.py --ptt-profile accuracy
-scripts/stt_codex.py --ptt-profile speed
-scripts/stt_codex.py --ptt-profile speed --release-gap 0.5
-STT_PTT_PROFILE=speed scripts/stt_codex.py
+scripts/stt_codex.py
+scripts/stt_codex.py --release-gap 0.5
 STT_PTT_RELEASE_GAP=0.5 scripts/stt_codex.py
 ```
 
-- 기본 profile은 `accuracy`다.
-- `accuracy` release gap은 `0.75s`다.
-- `speed` release gap은 `0.35s`다.
-- deterministic stop-wait delta는 `0.75s -> 0.35s`, 즉 `-0.40s`다.
-- 직접 지정한 `--release-gap` 또는 `STT_PTT_RELEASE_GAP`이 profile보다 우선한다.
+- 기본 release gap은 `0.35s`다.
+- `--release-gap` 또는 `STT_PTT_RELEASE_GAP`으로 stop 판정 대기시간을 직접 지정한다.
+- 이전 `accuracy` profile의 값은 `0.75s`였다. 같은 동작이 필요하면 `--release-gap 0.75`를 사용한다.
+- 이전 `speed` profile의 값은 `0.35s`였고, 현재 기본값과 같다.
+- 우선순위는 `--release-gap`, `STT_PTT_RELEASE_GAP`, 기본값 순서다.
+- `--ptt-profile`과 `STT_PTT_PROFILE`은 더 이상 설정 surface가 아니다.
 - Enter 자동 전송은 없다. transcript 삽입 뒤 사용자가 직접 확인하고 전송한다.
-- Fixed smoke STT는 이 leaf에서 재측정하지 않았다. 이유는 release-gap profile이
+- Fixed smoke STT는 이 계약 변경에서 재측정하지 않는다. 이유는 release-gap이
   CLI/env stop timing 선택만 바꾸기 때문이다.
 - Report 위치: `evals/stt_accuracy/reports/2026-06-23-release-gap-speed-profile.md`.
 
@@ -256,16 +259,18 @@ scripts/evaluate_beam_vad_tradeoff.py \
 - Full suite는 미측정이다. `beam1-vad-on`은 fixed-smoke-only 후보이지 기본값이 아니다.
 - Report 위치: `evals/stt_accuracy/reports/2026-06-23-beam-vad-tradeoff.md`.
 
-## Speed Profile Tradeoff Summary
+## Speed/Accuracy Tradeoff Summary
 
-사용자-facing 기본값은 정확도 우선이다. Speed 관련 option은 모두 명시 opt-in이다.
+사용자-facing 기본 runtime은 `release gap 0.35s`, `worker` backend, `audio-handoff auto`다.
+저장/debug option이 꺼져 있으면 기본 handoff는 buffer다. 더 긴 stop 판정 대기와 file/subprocess
+path는 명시 opt-in이다.
 
 | surface | command/config | measured delta | quality | status |
 | --- | --- | ---: | ---: | --- |
-| default PTT | `scripts/stt_codex.py` | release gap `0.75s` | 기본값 | default |
-| PTT speed | `scripts/stt_codex.py --ptt-profile speed` | stop-wait `-0.40s` | live truncation 미측정 | opt-in |
-| worker file | `scripts/stt_codex.py --stt-backend worker --audio-handoff file` | #29 대비 `-3.337s` | score `0.6423`, CER `0.3156` | speed path |
-| worker buffer | `scripts/stt_codex.py --stt-backend worker --audio-handoff buffer` | #29 대비 `-3.420s`, worker file 대비 `-0.083s` | score `0.6423`, CER `0.3156` | speed path |
+| default runtime | `scripts/stt_codex.py` | release gap `0.35s`, worker buffer avg `2.536s` | fixed smoke score `0.6423`, CER `0.3156` | default |
+| longer PTT wait | `scripts/stt_codex.py --release-gap 0.75` | stop-wait `+0.40s` | live truncation 미측정 | opt-in |
+| worker file | `scripts/stt_codex.py --audio-handoff file` | #29 대비 `-3.337s` | score `0.6423`, CER `0.3156` | file override |
+| worker buffer | `scripts/stt_codex.py` 또는 `--audio-handoff buffer` | #29 대비 `-3.420s`, worker file 대비 `-0.083s` | score `0.6423`, CER `0.3156` | default request path |
 | beam1 VAD on | `scripts/stt_codex.py --stt-beam-size 1` | default 대비 `-0.018s`, #29 대비 `-0.783s` | score `0.6423`, CER `0.3156` | fixed-smoke-only 후보 |
 | VAD off | `scripts/stt_codex.py --stt-no-vad-filter` | fastest combo도 floor 실패 | score `0.6233`, CER `0.3394` | excluded |
 
@@ -280,6 +285,21 @@ Floor와 report 위치:
 - Raw run artifact: `evals/stt_accuracy/runs/<run_id>/`, local-only.
 - #28 closeout summary source: 이 section과 root `README.md`의
   `Speed/Accuracy Decision Surface`.
+
+## Option Taxonomy
+
+`scripts/stt_codex.py` option은 하나의 speed/accuracy profile로 묶지 않는다.
+
+| 분류 | options | 실행 의미 |
+| --- | --- | --- |
+| load-time | `--stt-model`, `--stt-device`, `--stt-compute-type`, `--stt-backend` | model load 비용과 worker process 수명에 영향을 준다. 기본 backend는 `worker`다. |
+| decode-time | `--stt-beam-size`, `--stt-no-vad-filter`, `--stt-initial-prompt`, `--stt-language` | 이미 녹음된 audio를 transcript로 바꾸는 decoding 정책이다. |
+| runtime/backend | `--release-gap`, `--min-duration`, `--max-duration`, `--audio-handoff` | PTT stop timing, 녹음 길이 guard, audio handoff 방식을 바꾼다. |
+| artifact/debug | `--save-run`, `--keep-audio`, `--run-output-dir`, `--temp-dir` | run artifact와 임시 audio 보존 정책이다. |
+
+`--release-gap`은 PTT runtime option이다. `worker` backend와 buffer handoff는
+공통 runtime 기본값이다. `--stt-backend subprocess`와 `--audio-handoff file`은
+명시 override다. `--stt-beam-size`와 VAD 설정은 decode-time option이다.
 
 ## Speech Sample Recording
 
@@ -540,30 +560,28 @@ scripts/stt_codex.py --stt-model large-v3 --stt-device cuda --stt-compute-type f
 scripts/stt_codex.py --stt-model tiny --stt-device cpu --stt-compute-type int8 --cmd python3 -- -q
 ```
 
-PTT speed profile:
+PTT release gap 직접 지정:
 
 ```bash
-scripts/stt_codex.py --ptt-profile speed
+scripts/stt_codex.py --release-gap 0.75
 ```
 
 - STT mode 기본 trigger는 `ctrl+t`다.
 - `ctrl+t`는 child PTY로 전달되지 않고 parent가 소비한다.
 - `--inject-key t`처럼 trigger를 바꿀 수 있다.
-- `--ptt-profile`은 release gap profile이다. 기본값은 `accuracy`다.
-- `accuracy` profile release gap은 `0.75s`다.
-- `speed` profile release gap은 `0.35s`다.
-- `STT_PTT_PROFILE=speed`로 speed profile을 기본 선택할 수 있다.
 - `--release-gap`은 trigger 반복 입력이 끊긴 뒤 녹음을 종료할 때까지 기다리는 시간을 직접 지정한다.
-- 우선순위는 `--release-gap` / `STT_PTT_RELEASE_GAP` > `--ptt-profile` / `STT_PTT_PROFILE` > `accuracy` default다.
-- `speed` profile의 deterministic wait delta는 `0.75s -> 0.35s`, 즉 `-0.40s`다.
-- release gap을 낮추면 말 끝 truncation risk가 커질 수 있다.
-- `--stt-backend worker --audio-handoff buffer`는 persistent worker request path의
-  speed path다. Fixed smoke 평균은 `2.536s`이고 #29 subprocess 평균 `5.956s`
-  대비 `-3.420s`다.
+- 기본 release gap은 `0.35s`다.
+- 우선순위는 `--release-gap` / `STT_PTT_RELEASE_GAP` > 기본값 순서다.
+- `--ptt-profile`과 `STT_PTT_PROFILE`은 더 이상 설정 surface가 아니다.
+- 이전 `accuracy` profile과 같은 대기가 필요하면 `--release-gap 0.75`를 사용한다.
+- release gap이 짧으면 말 끝 truncation risk가 커질 수 있다.
+- 기본 runtime은 `--stt-backend worker --audio-handoff auto`다. 저장/debug option이
+  꺼져 있으면 buffer handoff를 사용한다. Fixed smoke 평균은 `2.536s`이고
+  #29 subprocess 평균 `5.956s` 대비 `-3.420s`다.
 - `--stt-beam-size 1`은 VAD on일 때 fixed smoke 평균 `5.173s`로 default
   `beam5-vad-on` `5.191s` 대비 `-0.018s`였다. Full suite 미측정이므로
   fixed-smoke-only 후보로만 다룬다.
-- `--stt-no-vad-filter`는 speed profile로 쓰지 않는다. VAD off는 score `0.6233`,
+- `--stt-no-vad-filter`는 speed path로 쓰지 않는다. VAD off는 score `0.6233`,
   normalized CER `0.3394`, `cmd-0002` floor 실패로 제외한다.
 - `--min-duration`보다 짧은 녹음은 STT 없이 버린다.
 - `--max-duration`을 넘으면 자동으로 녹음을 종료한다.
@@ -689,20 +707,24 @@ scripts/transcribe.sh fixtures/generated/kss-row-00000/audio.wav --model large-v
 - suite 검증은 단어 추가, 누락, 치환을 실패로 본다.
 - KSS fixture는 `cc-by-nc-sa-4.0`이므로 비상업 실험용으로만 사용한다.
 
-Wrapper session에서 model load를 한 번만 수행하려면 persistent worker backend를
-명시한다. audio handoff는 `--audio-handoff`로 고른다.
+Wrapper session은 기본적으로 persistent worker backend를 사용해 model을 한 번만
+load한다. audio handoff는 `--audio-handoff`로 고른다.
 
 ```bash
-scripts/stt_codex.py --stt-backend worker --stt-model large-v3 --stt-device cuda --stt-compute-type float16
-scripts/stt_codex.py --stt-backend worker --audio-handoff buffer
+scripts/stt_codex.py --stt-model large-v3 --stt-device cuda --stt-compute-type float16
+scripts/stt_codex.py --audio-handoff file
+scripts/stt_codex.py --stt-backend subprocess
 ```
 
-- 기본 backend는 `subprocess`다.
+- 기본 backend는 `worker`다.
 - `worker` backend는 `scripts/transcribe_worker.sh`가 CUDA library path를 준비한 뒤
   `scripts/transcribe_worker.py`를 long-lived process로 실행한다.
+- 현재 worktree에 `.venv`가 없으면 worker/subprocess launcher 모두 main/primary
+  worktree의 `.venv`를 자동 fallback으로 사용한다.
 - `--audio-handoff auto`는 worker backend에서 `--save-run`과 `--keep-audio`가 꺼진
   경우 buffer를 사용한다.
 - `--save-run` 또는 `--keep-audio`가 켜지면 audio 보존 계약을 우선해 file handoff를
   사용한다.
+- `--stt-backend subprocess`는 이전 file-backed subprocess path를 명시적으로 사용한다.
 - worker protocol은 stdin/stdout newline-delimited JSON이다.
 - worker status와 model load log는 stderr에 출력한다.
