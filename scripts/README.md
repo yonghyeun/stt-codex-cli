@@ -149,6 +149,29 @@ renderer는 기본적으로 `evals/stt_accuracy/metric_contract.json`을 읽어 
 source metric, direction, failure type 설명을 출력한다. 다른 contract 검증이 필요할 때만
 `--metric-contract <path>`를 사용한다.
 
+## PTT Release Gap Speed Profile Report
+
+`#33` PTT speed profile은 STT model이나 transcript policy가 아니라 녹음 stop 판정
+대기시간만 바꾼다.
+
+```bash
+scripts/stt_codex.py --ptt-profile accuracy
+scripts/stt_codex.py --ptt-profile speed
+scripts/stt_codex.py --ptt-profile speed --release-gap 0.5
+STT_PTT_PROFILE=speed scripts/stt_codex.py
+STT_PTT_RELEASE_GAP=0.5 scripts/stt_codex.py
+```
+
+- 기본 profile은 `accuracy`다.
+- `accuracy` release gap은 `0.75s`다.
+- `speed` release gap은 `0.35s`다.
+- deterministic stop-wait delta는 `0.75s -> 0.35s`, 즉 `-0.40s`다.
+- 직접 지정한 `--release-gap` 또는 `STT_PTT_RELEASE_GAP`이 profile보다 우선한다.
+- Enter 자동 전송은 없다. transcript 삽입 뒤 사용자가 직접 확인하고 전송한다.
+- Fixed smoke STT는 이 leaf에서 재측정하지 않았다. 이유는 release-gap profile이
+  CLI/env stop timing 선택만 바꾸기 때문이다.
+- Report 위치: `evals/stt_accuracy/reports/2026-06-23-release-gap-speed-profile.md`.
+
 ## Audio Handoff Latency Harness
 
 `#32` buffer handoff는 persistent worker의 file handoff와 buffer handoff를 같은 fixed
@@ -179,6 +202,84 @@ scripts/measure_audio_handoff_latency.py \
 - `buffer`: persistent worker에 base64 WAV bytes를 전달한다.
 - 실행 결과는 `evals/stt_accuracy/runs/<run_id>/` 아래 local-only artifact로 남긴다.
 - report는 `#29` fixed smoke latency baseline과 case score를 prior value로 표시한다.
+- Fixed smoke input set은 `cmd-0002`, `cmd-0018`, `cmd-0021`, `cmd-0024`다.
+- `#29` subprocess 평균 latency는 `5.956s`다.
+- persistent worker file 평균 latency는 `2.619s`다. #29 대비 `-3.337s`다.
+- persistent worker buffer 평균 latency는 `2.536s`다. #29 대비 `-3.420s`다.
+- buffer는 worker file 대비 `-0.083s`다.
+- file과 buffer의 평균 score는 모두 `0.6423`이고 평균 normalized CER은 모두 `0.3156`이다.
+- Report 위치: `evals/stt_accuracy/reports/2026-06-23-buffer-handoff.md`.
+
+## Beam/VAD Tradeoff Harness
+
+`#35` beam/VAD tradeoff는 기존 file-based latency baseline primitive로
+`beam_size=5/1`과 VAD on/off matrix를 같은 fixed smoke input에서 비교한다.
+
+```bash
+STT_PYTHON_BIN=/path/to/.venv/bin/python \
+STT_SITE_PACKAGES=/path/to/.venv/lib/python3.12/site-packages \
+scripts/evaluate_beam_vad_tradeoff.py \
+  --run-id-prefix 20260623-beam-vad-fixed-smoke \
+  --input-root /path/to/stt-codex-cli/evals/inputs/speech/v1 \
+  --model large-v3 \
+  --device cuda \
+  --compute-type float16 \
+  --language ko \
+  --report-output evals/stt_accuracy/reports/2026-06-23-beam-vad-tradeoff.md
+```
+
+Dry-run은 model load 없이 suite/input 연결, fixed smoke sample, matrix 조합을
+검증한다.
+
+```bash
+scripts/evaluate_beam_vad_tradeoff.py \
+  --input-root /path/to/stt-codex-cli/evals/inputs/speech/v1 \
+  --dry-run
+```
+
+- 기본 비교 조합은 `beam5-vad-on`, `beam1-vad-on`, `beam5-vad-off`,
+  `beam1-vad-off`다.
+- same-run default combo는 `beam5-vad-on`이다.
+- report는 `#29` current-input fixed smoke case score와 subprocess 평균 latency를
+  prior value로 표시한다.
+- 실행 결과는 `evals/stt_accuracy/runs/<run_id_prefix>-<combo>/` 아래 local-only
+  artifact로 남긴다.
+- Git-tracked report에는 raw transcript 전체를 붙이지 않는다.
+- Fixed smoke input set은 `cmd-0002`, `cmd-0018`, `cmd-0021`, `cmd-0024`다.
+- default `beam5-vad-on` 평균 latency는 `5.191s`다.
+- `beam1-vad-on` 평균 latency는 `5.173s`다. default 대비 `-0.018s`, #29 대비
+  `-0.783s`다.
+- `beam5-vad-on`과 `beam1-vad-on`의 평균 score는 모두 `0.6423`이고 평균
+  normalized CER은 모두 `0.3156`이다.
+- VAD off는 제외한다. VAD off 평균 score는 `0.6233`, 평균 normalized CER은
+  `0.3394`이고 `cmd-0002` floor에 실패했다.
+- Full suite는 미측정이다. `beam1-vad-on`은 fixed-smoke-only 후보이지 기본값이 아니다.
+- Report 위치: `evals/stt_accuracy/reports/2026-06-23-beam-vad-tradeoff.md`.
+
+## Speed Profile Tradeoff Summary
+
+사용자-facing 기본값은 정확도 우선이다. Speed 관련 option은 모두 명시 opt-in이다.
+
+| surface | command/config | measured delta | quality | status |
+| --- | --- | ---: | ---: | --- |
+| default PTT | `scripts/stt_codex.py` | release gap `0.75s` | 기본값 | default |
+| PTT speed | `scripts/stt_codex.py --ptt-profile speed` | stop-wait `-0.40s` | live truncation 미측정 | opt-in |
+| worker file | `scripts/stt_codex.py --stt-backend worker --audio-handoff file` | #29 대비 `-3.337s` | score `0.6423`, CER `0.3156` | speed path |
+| worker buffer | `scripts/stt_codex.py --stt-backend worker --audio-handoff buffer` | #29 대비 `-3.420s`, worker file 대비 `-0.083s` | score `0.6423`, CER `0.3156` | speed path |
+| beam1 VAD on | `scripts/stt_codex.py --stt-beam-size 1` | default 대비 `-0.018s`, #29 대비 `-0.783s` | score `0.6423`, CER `0.3156` | fixed-smoke-only 후보 |
+| VAD off | `scripts/stt_codex.py --stt-no-vad-filter` | fastest combo도 floor 실패 | score `0.6233`, CER `0.3394` | excluded |
+
+Floor와 report 위치:
+
+- Governance와 artifact ownership: `evals/stt_accuracy/reports/2026-06-21-governance.md`.
+- Report 계약: `evals/stt_accuracy/reports/README.md`.
+- Metric routing: `evals/stt_accuracy/metric_contract.json`.
+- Fixed smoke report: `evals/stt_accuracy/reports/2026-06-23-buffer-handoff.md`,
+  `evals/stt_accuracy/reports/2026-06-23-release-gap-speed-profile.md`,
+  `evals/stt_accuracy/reports/2026-06-23-beam-vad-tradeoff.md`.
+- Raw run artifact: `evals/stt_accuracy/runs/<run_id>/`, local-only.
+- #28 closeout summary source: 이 section과 root `README.md`의
+  `Speed/Accuracy Decision Surface`.
 
 ## Speech Sample Recording
 
@@ -439,15 +540,37 @@ scripts/stt_codex.py --stt-model large-v3 --stt-device cuda --stt-compute-type f
 scripts/stt_codex.py --stt-model tiny --stt-device cpu --stt-compute-type int8 --cmd python3 -- -q
 ```
 
+PTT speed profile:
+
+```bash
+scripts/stt_codex.py --ptt-profile speed
+```
+
 - STT mode 기본 trigger는 `ctrl+t`다.
 - `ctrl+t`는 child PTY로 전달되지 않고 parent가 소비한다.
 - `--inject-key t`처럼 trigger를 바꿀 수 있다.
-- `--release-gap`은 trigger 반복 입력이 끊긴 뒤 녹음을 종료할 때까지 기다리는 시간이다.
+- `--ptt-profile`은 release gap profile이다. 기본값은 `accuracy`다.
+- `accuracy` profile release gap은 `0.75s`다.
+- `speed` profile release gap은 `0.35s`다.
+- `STT_PTT_PROFILE=speed`로 speed profile을 기본 선택할 수 있다.
+- `--release-gap`은 trigger 반복 입력이 끊긴 뒤 녹음을 종료할 때까지 기다리는 시간을 직접 지정한다.
+- 우선순위는 `--release-gap` / `STT_PTT_RELEASE_GAP` > `--ptt-profile` / `STT_PTT_PROFILE` > `accuracy` default다.
+- `speed` profile의 deterministic wait delta는 `0.75s -> 0.35s`, 즉 `-0.40s`다.
+- release gap을 낮추면 말 끝 truncation risk가 커질 수 있다.
+- `--stt-backend worker --audio-handoff buffer`는 persistent worker request path의
+  speed path다. Fixed smoke 평균은 `2.536s`이고 #29 subprocess 평균 `5.956s`
+  대비 `-3.420s`다.
+- `--stt-beam-size 1`은 VAD on일 때 fixed smoke 평균 `5.173s`로 default
+  `beam5-vad-on` `5.191s` 대비 `-0.018s`였다. Full suite 미측정이므로
+  fixed-smoke-only 후보로만 다룬다.
+- `--stt-no-vad-filter`는 speed profile로 쓰지 않는다. VAD off는 score `0.6233`,
+  normalized CER `0.3394`, `cmd-0002` floor 실패로 제외한다.
 - `--min-duration`보다 짧은 녹음은 STT 없이 버린다.
 - `--max-duration`을 넘으면 자동으로 녹음을 종료한다.
-- 녹음 파일은 system temp directory에 임시 WAV로 만든다.
+- file handoff와 저장/debug option에서는 녹음을 system temp directory의 임시 WAV로 만든다.
+- buffer handoff에서는 worker request에 in-memory WAV bytes를 전달한다.
 - 기본적으로 STT 후 임시 WAV를 삭제한다.
-- `--keep-audio`를 주면 임시 WAV를 삭제하지 않는다.
+- `--keep-audio`를 주면 file handoff의 임시 WAV를 삭제하지 않는다.
 - `--save-run`을 주면 `output/runs/` 아래에 audio, transcript, metadata를 저장한다.
 - transcript가 비어 있거나 punctuation-only이면 child PTY에 삽입하지 않는다.
 - token recovery는 수행하지 않는다.
@@ -567,14 +690,19 @@ scripts/transcribe.sh fixtures/generated/kss-row-00000/audio.wav --model large-v
 - KSS fixture는 `cc-by-nc-sa-4.0`이므로 비상업 실험용으로만 사용한다.
 
 Wrapper session에서 model load를 한 번만 수행하려면 persistent worker backend를
-명시한다. audio handoff는 여전히 임시 WAV path다.
+명시한다. audio handoff는 `--audio-handoff`로 고른다.
 
 ```bash
 scripts/stt_codex.py --stt-backend worker --stt-model large-v3 --stt-device cuda --stt-compute-type float16
+scripts/stt_codex.py --stt-backend worker --audio-handoff buffer
 ```
 
 - 기본 backend는 `subprocess`다.
 - `worker` backend는 `scripts/transcribe_worker.sh`가 CUDA library path를 준비한 뒤
   `scripts/transcribe_worker.py`를 long-lived process로 실행한다.
+- `--audio-handoff auto`는 worker backend에서 `--save-run`과 `--keep-audio`가 꺼진
+  경우 buffer를 사용한다.
+- `--save-run` 또는 `--keep-audio`가 켜지면 audio 보존 계약을 우선해 file handoff를
+  사용한다.
 - worker protocol은 stdin/stdout newline-delimited JSON이다.
 - worker status와 model load log는 stderr에 출력한다.
