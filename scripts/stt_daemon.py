@@ -50,6 +50,23 @@ class DaemonConfig:
     config_id: str
 
 
+@dataclass
+class RequestRecord:
+    sequence: int
+    request_id: str
+    state: str
+    queued_at: float
+    queued_monotonic: float
+    queue_rank_at_enqueue: int
+    started_at: float | None = None
+    started_monotonic: float | None = None
+    finished_at: float | None = None
+    finished_monotonic: float | None = None
+    client_pid: int | str = "unknown"
+    client_uid: int | str = "unknown"
+    client_gid: int | str = "unknown"
+
+
 class TranscriptionDaemon:
     def __init__(
         self,
@@ -59,7 +76,12 @@ class TranscriptionDaemon:
     ) -> None:
         self._config = config
         self._model = model
-        self._lock = threading.Lock()
+        self._condition = threading.Condition()
+        self._queued_requests: list[RequestRecord] = []
+        self._running_request: RequestRecord | None = None
+        self._next_sequence = 0
+        self._started_monotonic = time.monotonic()
+        self._last_request_finished_monotonic: float | None = None
         self._model_load_count = 1
 
     @property
@@ -67,7 +89,7 @@ class TranscriptionDaemon:
         return self._config.config_id
 
     def handle_request(self, request: dict[str, object]) -> dict[str, object]:
-        received_at = time.monotonic()
+        record = self._enqueue_request(request)
         try:
             requested_config_id = request.get("config_id")
             if requested_config_id != self._config.config_id:
@@ -79,13 +101,14 @@ class TranscriptionDaemon:
             audio_input = transcribe_worker.audio_input_from_request(request)
             worker_config = request_worker_config(request, self._config)
 
-            with self._lock:
-                queue_wait_seconds = time.monotonic() - received_at
-                transcript, info, segment_count, elapsed = transcribe_worker.transcribe_audio(
-                    model=self._model,
-                    audio_source=audio_input.source,
-                    config=worker_config,
-                )
+            self._start_request(record)
+            queue_wait_seconds = self._queue_wait_seconds(record)
+            transcript, info, segment_count, elapsed = transcribe_worker.transcribe_audio(
+                model=self._model,
+                audio_source=audio_input.source,
+                config=worker_config,
+            )
+            self._finish_request(record, "done")
 
             return {
                 "ok": True,
@@ -100,9 +123,195 @@ class TranscriptionDaemon:
                 "model_load_count": self._model_load_count,
                 "queue_wait_seconds": round(queue_wait_seconds, 6),
                 "elapsed_seconds": round(elapsed, 6),
+                **request_record_metadata(record),
             }
         except Exception as error:
-            return {"ok": False, "error": str(error), "config_id": self._config.config_id}
+            self._finish_request(record, "error")
+            return {
+                "ok": False,
+                "error": str(error),
+                "config_id": self._config.config_id,
+                **request_record_metadata(record),
+            }
+
+    def handle_stats_request(
+        self,
+        request: dict[str, object],
+        *,
+        idle_timeout_seconds: float | None,
+    ) -> dict[str, object]:
+        requested_config_id = request.get("config_id")
+        if requested_config_id is not None and requested_config_id != self._config.config_id:
+            return {
+                "ok": False,
+                "type": "stats",
+                "error": (
+                    f"config mismatch: requested {requested_config_id!r}, "
+                    f"daemon {self._config.config_id!r}"
+                ),
+                "config_id": self._config.config_id,
+            }
+
+        own_request_id = optional_stats_request_id(request)
+        with self._condition:
+            running = self._running_request
+            queued = list(self._queued_requests)
+            requests: list[dict[str, object]] = []
+            if running is not None:
+                requests.append(request_summary(running, queue_rank=1))
+            start_rank = 2 if running is not None else 1
+            requests.extend(
+                request_summary(record, queue_rank=rank)
+                for rank, record in enumerate(queued, start=start_rank)
+            )
+            own_request = next(
+                (
+                    summary
+                    for summary in requests
+                    if summary["request_id"] == own_request_id
+                ),
+                None,
+            )
+            idle_timeout_remaining = self._idle_timeout_remaining_seconds(
+                idle_timeout_seconds
+            )
+            daemon_state = "busy" if running is not None else "queued" if queued else "idle"
+
+        return {
+            "ok": True,
+            "type": "stats",
+            "config_id": self._config.config_id,
+            "daemon_state": daemon_state,
+            "running_request": request_summary(running, queue_rank=1)
+            if running is not None
+            else None,
+            "queued_request_count": len(queued),
+            "active_request_count": len(requests),
+            "requests": requests,
+            "own_request": own_request,
+            "own_queue_rank": own_request["queue_rank"] if own_request is not None else None,
+            "own_request_state": own_request["request_state"]
+            if own_request is not None
+            else "unknown",
+            "idle_timeout_remaining_seconds": idle_timeout_remaining,
+        }
+
+    def idle_timeout_reached(self, idle_timeout_seconds: float | None) -> bool:
+        if idle_timeout_seconds is None:
+            return False
+        if self._last_request_finished_monotonic is None:
+            return False
+        remaining = self._idle_timeout_remaining_seconds(idle_timeout_seconds)
+        return remaining is not None and remaining <= 0
+
+    def _idle_timeout_remaining_seconds(
+        self,
+        idle_timeout_seconds: float | None,
+    ) -> float | None:
+        if idle_timeout_seconds is None:
+            return None
+        if self._running_request is not None or self._queued_requests:
+            return None
+        baseline = self._last_request_finished_monotonic or self._started_monotonic
+        elapsed = time.monotonic() - baseline
+        return round(max(0.0, idle_timeout_seconds - elapsed), 6)
+
+    def _enqueue_request(self, request: dict[str, object]) -> RequestRecord:
+        with self._condition:
+            self._next_sequence += 1
+            sequence = self._next_sequence
+            record = RequestRecord(
+                sequence=sequence,
+                request_id=request_id_from_request(request, sequence),
+                state="queued",
+                queued_at=time.time(),
+                queued_monotonic=time.monotonic(),
+                queue_rank_at_enqueue=len(self._queued_requests)
+                + (1 if self._running_request is not None else 0)
+                + 1,
+            )
+            self._queued_requests.append(record)
+            self._condition.notify_all()
+            return record
+
+    def _start_request(self, record: RequestRecord) -> None:
+        with self._condition:
+            while (
+                self._running_request is not None
+                or not self._queued_requests
+                or self._queued_requests[0] is not record
+            ):
+                self._condition.wait()
+            self._queued_requests.pop(0)
+            self._running_request = record
+            record.state = "running"
+            record.started_at = time.time()
+            record.started_monotonic = time.monotonic()
+
+    def _finish_request(self, record: RequestRecord, state: str) -> None:
+        with self._condition:
+            if record in self._queued_requests:
+                self._queued_requests.remove(record)
+            if self._running_request is record:
+                self._running_request = None
+            if record.finished_at is None:
+                record.finished_at = time.time()
+                record.finished_monotonic = time.monotonic()
+                self._last_request_finished_monotonic = record.finished_monotonic
+            record.state = state
+            self._condition.notify_all()
+
+    @staticmethod
+    def _queue_wait_seconds(record: RequestRecord) -> float:
+        if record.started_monotonic is None:
+            return 0.0
+        return record.started_monotonic - record.queued_monotonic
+
+
+def request_id_from_request(request: dict[str, object], sequence: int) -> str:
+    request_id = request.get("request_id")
+    if request_id is None:
+        return f"req-{sequence:06d}"
+    if not isinstance(request_id, str) or not request_id.strip():
+        raise ValueError("request.request_id must be a non-empty string")
+    return request_id
+
+
+def optional_stats_request_id(request: dict[str, object]) -> str | None:
+    request_id = request.get("request_id")
+    if request_id is None:
+        return None
+    if not isinstance(request_id, str) or not request_id.strip():
+        raise ValueError("request.request_id must be a non-empty string")
+    return request_id
+
+
+def request_record_metadata(record: RequestRecord) -> dict[str, object]:
+    metadata: dict[str, object] = {
+        "request_id": record.request_id,
+        "request_state": record.state,
+        "queue_rank_at_enqueue": record.queue_rank_at_enqueue,
+        "queued_at": round(record.queued_at, 6),
+        "client_pid": record.client_pid,
+        "client_uid": record.client_uid,
+        "client_gid": record.client_gid,
+    }
+    if record.started_at is not None:
+        metadata["started_at"] = round(record.started_at, 6)
+    if record.finished_at is not None:
+        metadata["finished_at"] = round(record.finished_at, 6)
+    return metadata
+
+
+def request_summary(record: RequestRecord, *, queue_rank: int) -> dict[str, object]:
+    summary = request_record_metadata(record)
+    summary["state"] = record.state
+    summary["queue_rank"] = queue_rank
+    return summary
+
+
+def is_stats_request(request: dict[str, object]) -> bool:
+    return request.get("type") == "stats"
 
 
 def request_worker_config(
@@ -222,26 +431,23 @@ def serve_daemon(
 
     threads: list[threading.Thread] = []
     activity_lock = threading.Lock()
-    last_activity = time.monotonic()
     active_connections = 0
 
     def mark_connection_started() -> None:
-        nonlocal active_connections, last_activity
+        nonlocal active_connections
         with activity_lock:
             active_connections += 1
-            last_activity = time.monotonic()
 
     def mark_connection_done() -> None:
-        nonlocal active_connections, last_activity
+        nonlocal active_connections
         with activity_lock:
             active_connections -= 1
-            last_activity = time.monotonic()
 
     def idle_timeout_reached() -> bool:
         with activity_lock:
             if active_connections > 0:
                 return False
-            return time.monotonic() - last_activity >= idle_timeout_seconds
+        return daemon.idle_timeout_reached(idle_timeout_seconds)
 
     with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as server:
         server.bind(str(socket_path))
@@ -261,7 +467,12 @@ def serve_daemon(
                 mark_connection_started()
                 thread = threading.Thread(
                     target=_handle_connection,
-                    args=(connection, daemon, mark_connection_done),
+                    args=(
+                        connection,
+                        daemon,
+                        mark_connection_done,
+                        idle_timeout_seconds,
+                    ),
                 )
                 thread.start()
                 threads.append(thread)
@@ -287,6 +498,7 @@ def _handle_connection(
     connection: socket.socket,
     daemon: TranscriptionDaemon,
     on_done: Callable[[], None] | None = None,
+    idle_timeout_seconds: float | None = None,
 ) -> None:
     try:
         with connection:
@@ -295,7 +507,13 @@ def _handle_connection(
                 request = json.loads(line)
                 if not isinstance(request, dict):
                     raise ValueError("request must be a JSON object")
-                response = daemon.handle_request(request)
+                if is_stats_request(request):
+                    response = daemon.handle_stats_request(
+                        request,
+                        idle_timeout_seconds=idle_timeout_seconds,
+                    )
+                else:
+                    response = daemon.handle_request(request)
             except Exception as error:
                 response = {"ok": False, "error": str(error), "config_id": daemon.config_id}
             connection.sendall(json.dumps(response, ensure_ascii=False).encode() + b"\n")

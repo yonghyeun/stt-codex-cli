@@ -4,6 +4,7 @@ import base64
 import json
 import subprocess
 import tempfile
+import threading
 import unittest
 from dataclasses import replace
 from io import StringIO
@@ -169,6 +170,40 @@ class FakeDaemonRequest:
         if self._fail_first is not None and len(self.calls) == 1:
             raise self._fail_first
         return self._responses.pop(0)
+
+
+class BlockingDaemonRequest:
+    def __init__(self) -> None:
+        self.calls: list[tuple[Path, dict[str, object], float]] = []
+        self._lock = threading.Lock()
+        self._release = threading.Event()
+
+    def __call__(
+        self,
+        socket_path: Path,
+        request: dict[str, object],
+        *,
+        timeout_seconds: float,
+    ) -> dict[str, object]:
+        with self._lock:
+            self.calls.append((socket_path, request, timeout_seconds))
+        if request.get("type") == "stats":
+            self._release.set()
+            return {
+                "ok": True,
+                "type": "stats",
+                "daemon_state": "busy",
+                "own_request_state": "queued",
+                "own_queue_rank": 2,
+                "active_request_count": 4,
+            }
+        self._release.wait(timeout=2.0)
+        return {
+            "ok": True,
+            "transcript": "daemon transcript",
+            "config_id": "unused",
+            "request_id": request["request_id"],
+        }
 
 
 class FakeSegment:
@@ -763,6 +798,55 @@ class DaemonTranscriptionClientTest(unittest.TestCase):
 
             with self.assertRaisesRegex(RuntimeError, "config mismatch"):
                 client.transcribe(TranscriptionRequest(audio_file=Path("audio.wav")))
+
+    def test_polls_stats_only_while_daemon_request_is_pending(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            request = BlockingDaemonRequest()
+            statuses: list[str] = []
+            config = TranscriptionConfig(
+                model="large-v3",
+                language="ko",
+                device="cuda",
+                compute_type="int8_float16",
+                beam_size=5,
+                initial_prompt=None,
+                vad_filter=True,
+            )
+            daemon_socket_path(config, socket_dir=Path(temp_dir)).touch()
+            client = DaemonTranscriptionClient(
+                repo_root=Path(temp_dir),
+                config=config,
+                status=statuses.append,
+                socket_dir=Path(temp_dir),
+                idle_timeout_seconds=300.0,
+                start_timeout_seconds=2.0,
+                stats_interval_seconds=0.01,
+                process_factory=FakeDaemonFactory(),
+                request_fn=request,
+                wait_for_socket=lambda path, timeout: None,
+            )
+
+            result = client.transcribe(TranscriptionRequest(audio_file=Path("audio.wav")))
+
+            self.assertEqual(result.transcript, "daemon transcript")
+            transcription_calls = [
+                call for call in request.calls if call[1].get("type") != "stats"
+            ]
+            stats_calls = [
+                call for call in request.calls if call[1].get("type") == "stats"
+            ]
+            self.assertEqual(len(transcription_calls), 1)
+            self.assertGreaterEqual(len(stats_calls), 1)
+            _, transcription_payload, _ = transcription_calls[0]
+            _, stats_payload, _ = stats_calls[0]
+            self.assertIsInstance(transcription_payload["request_id"], str)
+            self.assertEqual(
+                stats_payload["request_id"],
+                transcription_payload["request_id"],
+            )
+            self.assertEqual(stats_payload["config_id"], transcription_payload["config_id"])
+            self.assertIn("transcribing...", statuses)
+            self.assertIn("daemon queue: queued 2/4", statuses)
 
 
 class TranscriptionClientFactoryTest(unittest.TestCase):

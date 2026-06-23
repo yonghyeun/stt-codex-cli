@@ -598,7 +598,11 @@ scripts/stt_codex.py --trigger-mode hold --release-gap 0.75
   #29 subprocess 평균 `5.956s` 대비 `-3.420s`다.
 - 여러 wrapper가 같은 모델을 공유해야 하면 `--stt-backend daemon`을 사용한다. Daemon은
   `model/device/compute_type` load-time config 단위로 socket을 나누고, 같은 config의
-  request를 하나의 loaded model로 순차 처리한다.
+  request를 하나의 loaded model로 명시 FIFO queue에서 순차 처리한다.
+- daemon backend는 transcription 응답을 기다리는 동안에만 stats를 polling한다.
+  idle, 녹음 중, transcript 삽입 후에는 stats를 polling하지 않는다. 하단 status bar는
+  `STT queued 2/4 | wait`, `STT queued 1/3 | next`, `STT running | wait`처럼
+  본인 요청의 현재 queue 상태를 표시한다.
 - `--stt-beam-size 1`은 VAD on일 때 fixed smoke 평균 `5.173s`로 default
   `beam5-vad-on` `5.191s` 대비 `-0.018s`였다. Full suite 미측정이므로
   fixed-smoke-only 후보로만 다룬다.
@@ -758,10 +762,18 @@ Shared daemon backend:
 - socket 이름은 `model`, `device`, `compute_type`에서 계산한 config id를 사용한다.
 - `language`, `beam_size`, `initial_prompt`, `vad_filter`는 request-time option으로
   daemon request에 포함된다.
-- daemon response는 `config_id`, `model_load_count`, `queue_wait_seconds`,
-  `elapsed_seconds`를 포함한다.
+- daemon transcription request는 `request_id`와 queued/running/done/error 상태
+  metadata를 가진다.
+- daemon response는 `config_id`, `model_load_count`, `request_id`,
+  `queue_rank_at_enqueue`, `queue_wait_seconds`, `elapsed_seconds`를 포함한다.
+- `type=stats` request는 transcription queue에 들어가지 않는 control-plane 요청이다.
+  stats response는 `daemon_state`, `running_request`, `queued_request_count`,
+  `active_request_count`, `requests`, `own_request_state`, `own_queue_rank`,
+  `idle_timeout_remaining_seconds`를 포함한다.
+- wrapper는 daemon transcription response를 기다리는 동안에만 stats를 polling한다.
+  polling interval은 내부 기본값 `0.5s`이며 현재 CLI option은 아니다.
 - 같은 daemon 안에서는 request를 병렬 decode하지 않고 순차 처리한다.
-- 기본 idle timeout은 마지막 active request 완료 후 `600s`이며
+- 기본 idle timeout은 마지막 transcription request 완료 후 `600s`이며
   `--stt-daemon-idle-timeout` 또는 `STT_DAEMON_IDLE_TIMEOUT`으로 바꾼다.
 - daemon 시작 대기시간은 `--stt-daemon-start-timeout` 또는
   `STT_DAEMON_START_TIMEOUT`으로 바꾼다.
