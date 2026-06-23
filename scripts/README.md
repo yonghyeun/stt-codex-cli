@@ -588,7 +588,7 @@ scripts/stt_codex.py --trigger-mode hold --release-gap 0.75
 - `ctrl+t`는 child PTY로 전달되지 않고 parent가 소비한다.
 - 기본 trigger mode는 `tap`이다.
 - `tap` mode에서 첫 `ctrl+t`는 녹음을 시작하고 다음 `ctrl+t`는 녹음을 종료한다.
-- 녹음 중 status bar는 `STT recording 중 | Ctrl+T stop`으로 표시된다.
+- 녹음 중 status bar는 `STT recording 중 00:05 / 01:00 | Ctrl+T stop`처럼 현재/최대 녹음 시간을 표시한다.
 - `--inject-key t`처럼 trigger를 바꿀 수 있다.
 - `--trigger-mode hold`는 이전 hold/repeat PTT 동작을 유지한다.
 - `--release-gap`은 `hold` mode에서 trigger 반복 입력이 끊긴 뒤 녹음을 종료할 때까지 기다리는 시간을 직접 지정한다.

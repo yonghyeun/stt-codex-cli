@@ -281,6 +281,7 @@ class CodexInputTranscriptionClientTest(unittest.TestCase):
             last_trigger_at=time.monotonic() - 2.0,
         )
         called = False
+        statuses: list[str] = []
 
         def fake_finish_recording_and_inject(**kwargs: object) -> None:
             nonlocal called
@@ -297,12 +298,17 @@ class CodexInputTranscriptionClientTest(unittest.TestCase):
                 child_fd=-1,
                 child_command=["codex"],
                 state=state,
-                status=lambda message: None,
+                status=statuses.append,
                 transcription_client=FakeTranscriptionClient(),
                 transcription_config=codex_input.transcription_config_from_args(make_args()),
             )
 
         self.assertFalse(called)
+        self.assertEqual(len(statuses), 1)
+        self.assertRegex(
+            statuses[0],
+            r"^recording progress: elapsed=2\.[0-9]+s max=60s$",
+        )
 
     def test_tap_mode_finishes_when_stop_is_requested(self) -> None:
         state = RecordingState(

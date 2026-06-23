@@ -376,7 +376,7 @@ E2E는 사용자가 실제 장비로 발화한 뒤 확인한다.
 통과 기준:
 
 - `scripts/stt_codex.py`가 Codex CLI를 child PTY로 실행한다.
-- 사용자가 `Ctrl+T`로 녹음을 시작하면 `recording 중` 상태가 표시되고, 다시 `Ctrl+T`를 누르면 recording stop이 표시된다.
+- 사용자가 `Ctrl+T`로 녹음을 시작하면 `STT recording 중 00:05 / 01:00 | Ctrl+T stop`처럼 현재/최대 녹음 시간이 표시되고, 다시 `Ctrl+T`를 누르면 recording stop이 표시된다.
 - STT raw transcript가 Codex CLI 입력창에 삽입된다.
 - Enter는 자동 전송되지 않는다.
 - 사용자가 삽입된 문장을 수정하거나 그대로 Enter로 전송할 수 있다.

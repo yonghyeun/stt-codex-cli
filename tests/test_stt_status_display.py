@@ -18,6 +18,10 @@ class ParentStatusMessageTest(unittest.TestCase):
             ParentStatusMessage("STT recording 중 | Ctrl+T stop"),
         )
         self.assertEqual(
+            compact_parent_status("recording progress: elapsed=5.20s max=60s"),
+            ParentStatusMessage("STT recording 중 00:05 / 01:00 | Ctrl+T stop"),
+        )
+        self.assertEqual(
             compact_parent_status("recording stopped: elapsed=0.58s"),
             ParentStatusMessage("STT transcribing | 0.58s audio"),
         )
