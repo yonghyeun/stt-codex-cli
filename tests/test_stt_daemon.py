@@ -58,6 +58,23 @@ def wait_for_socket(socket_path: Path) -> None:
     raise AssertionError(f"socket not ready: {socket_path}")
 
 
+def wait_for_active_count(socket_path: Path, active_count: int) -> dict[str, object]:
+    deadline = time.monotonic() + 2.0
+    while time.monotonic() < deadline:
+        stats = stt_daemon.request_daemon(
+            socket_path,
+            {
+                "type": "stats",
+                "config_id": "large-v3-cpu-int8",
+                "request_id": "second-request",
+            },
+        )
+        if stats.get("active_request_count") == active_count:
+            return stats
+        time.sleep(0.01)
+    raise AssertionError(f"active_count did not reach {active_count}")
+
+
 class SttDaemonTest(unittest.TestCase):
     def test_daemon_reuses_loaded_model_for_multiple_socket_requests(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -167,6 +184,46 @@ class SttDaemonTest(unittest.TestCase):
 
         self.assertFalse(response["ok"])
         self.assertIn("config mismatch", response["error"])
+        self.assertEqual(response["request_state"], "error")
+
+    def test_stats_request_reports_idle_without_entering_transcription_queue(self) -> None:
+        model_factory = FakeDaemonModelFactory(["unused"])
+        daemon = stt_daemon.TranscriptionDaemon(
+            config=stt_daemon.DaemonConfig(
+                model="large-v3",
+                device="cpu",
+                compute_type="int8",
+                model_dir=None,
+                config_id="large-v3-cpu-int8",
+            ),
+            model=model_factory(
+                model="large-v3",
+                device="cpu",
+                compute_type="int8",
+                download_root=None,
+            ),
+        )
+
+        response = daemon.handle_stats_request(
+            {
+                "type": "stats",
+                "config_id": "large-v3-cpu-int8",
+                "request_id": "missing-request",
+            },
+            idle_timeout_seconds=600.0,
+        )
+
+        self.assertTrue(response["ok"])
+        self.assertEqual(response["type"], "stats")
+        self.assertEqual(response["daemon_state"], "idle")
+        self.assertEqual(response["queued_request_count"], 0)
+        self.assertEqual(response["active_request_count"], 0)
+        self.assertIsNone(response["running_request"])
+        self.assertEqual(response["requests"], [])
+        self.assertEqual(response["own_request_state"], "unknown")
+        self.assertIsNone(response["own_queue_rank"])
+        self.assertIsInstance(response["idle_timeout_remaining_seconds"], float)
+        self.assertEqual(model_factory.model.calls, [])
 
     def test_concurrent_requests_are_serialized_and_report_queue_wait(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -251,6 +308,88 @@ class SttDaemonTest(unittest.TestCase):
                 [Path(call[0]).name for call in model_factory.model.calls],
                 ["first.wav", "second.wav"],
             )
+
+    def test_stats_request_reports_running_and_queued_request_rank(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            socket_path = root / "stt.sock"
+            first_audio = root / "first.wav"
+            second_audio = root / "second.wav"
+            first_audio.write_bytes(b"fake wav")
+            second_audio.write_bytes(b"fake wav")
+            model_factory = FakeDaemonModelFactory(
+                ["first transcript", "second"],
+                delay_seconds=0.25,
+            )
+            stop_event = threading.Event()
+            server = threading.Thread(
+                target=stt_daemon.serve_daemon,
+                kwargs={
+                    "config": stt_daemon.DaemonConfig(
+                        model="large-v3",
+                        device="cpu",
+                        compute_type="int8",
+                        model_dir=None,
+                        config_id="large-v3-cpu-int8",
+                    ),
+                    "socket_path": socket_path,
+                    "idle_timeout_seconds": 600.0,
+                    "model_factory": model_factory,
+                    "stop_event": stop_event,
+                },
+                daemon=True,
+            )
+            server.start()
+            wait_for_socket(socket_path)
+            responses: list[dict[str, object]] = []
+
+            def send(audio_file: Path) -> None:
+                responses.append(
+                    stt_daemon.request_daemon(
+                        socket_path,
+                        {
+                            "config_id": "large-v3-cpu-int8",
+                            "request_id": f"{audio_file.stem}-request",
+                            "audio_file": str(audio_file),
+                            "language": "ko",
+                            "beam_size": 5,
+                            "initial_prompt": None,
+                            "vad_filter": True,
+                        },
+                        timeout_seconds=2.0,
+                    )
+                )
+
+            try:
+                first_client = threading.Thread(target=send, args=(first_audio,))
+                second_client = threading.Thread(target=send, args=(second_audio,))
+                first_client.start()
+                time.sleep(0.03)
+                second_client.start()
+
+                stats = wait_for_active_count(socket_path, 2)
+
+                first_client.join(timeout=2.0)
+                second_client.join(timeout=2.0)
+            finally:
+                stop_event.set()
+                server.join(timeout=2.0)
+
+            self.assertTrue(stats["ok"])
+            self.assertEqual(stats["daemon_state"], "busy")
+            self.assertEqual(stats["queued_request_count"], 1)
+            self.assertEqual(stats["active_request_count"], 2)
+            running_request = stats["running_request"]
+            self.assertIsInstance(running_request, dict)
+            self.assertEqual(running_request["request_id"], "first-request")
+            self.assertEqual(stats["own_request_state"], "queued")
+            self.assertEqual(stats["own_queue_rank"], 2)
+            self.assertEqual(
+                [request["request_id"] for request in stats["requests"]],
+                ["first-request", "second-request"],
+            )
+            self.assertEqual(len(responses), 2)
+            self.assertEqual(len(model_factory.model.calls), 2)
 
     def test_idle_timeout_does_not_stop_daemon_during_active_request(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
