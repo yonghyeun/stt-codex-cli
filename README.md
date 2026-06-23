@@ -77,7 +77,7 @@ Storage:
 Current core scripts:
 
 - `scripts/stt_codex.py`: 현재 메인 entrypoint. CLI option과 backward-compatible wrapper surface를 담당한다.
-- `scripts/transcribe.sh`: venv/CUDA library path를 준비하고 `transcribe.py`를 subprocess로 실행한다.
+- `scripts/transcribe.sh`: 현재 또는 main worktree venv와 CUDA library path를 준비하고 `transcribe.py`를 subprocess로 실행한다.
 - `scripts/transcribe.py`: faster-whisper STT 실행을 담당한다.
 - `scripts/transcribe_worker.sh`, `scripts/transcribe_worker.py`: wrapper session 안에서 faster-whisper model을 한 번 load하고 WAV path 또는 in-memory WAV buffer request를 반복 처리하는 persistent worker를 담당한다.
 - `scripts/run_fixture_suite.sh`, `scripts/run_fixture_suite.py`: fixture regression을 담당한다.
@@ -208,6 +208,8 @@ scripts/stt_codex.py
 ```
 
 `--stt-backend worker`가 기본값이고, `--audio-handoff auto`는 저장/debug audio option이 꺼진 경우 buffer를 사용한다. `--save-run` 또는 `--keep-audio`가 켜지면 file handoff로 돌아가 audio 보존 계약을 우선한다. subprocess fallback이 필요하면 `--stt-backend subprocess`를 명시한다.
+
+STT launcher는 `STT_PYTHON_BIN`을 명시하면 그 Python을 최우선으로 사용한다. 명시값이 없으면 현재 worktree의 `.venv`를 먼저 찾고, 없으면 `git worktree` 기준 main/primary worktree의 `.venv`를 fallback으로 사용한다. 따라서 issue worktree에서 실행해도 main workspace의 준비된 venv를 재사용할 수 있다.
 
 PTT release gap을 직접 지정:
 
@@ -399,6 +401,7 @@ E2E는 사용자가 실제 장비로 발화한 뒤 확인한다.
 - 명시적 저장 옵션을 켰을 때만 run artifact를 남긴다.
 - raw 입력 mode와 manual token recovery script는 서로 분리되어 있다.
 - 기본 STT backend는 worker다. wrapper session 안에서 model을 한 번 load하고 request를 반복 처리한다. `scripts/stt_codex.py --stt-backend subprocess`를 명시하면 이전 subprocess path를 사용할 수 있다.
+- STT launcher는 현재 worktree `.venv`가 없으면 main/primary worktree `.venv`를 자동 fallback으로 사용한다.
 
 ## Repository Shape
 

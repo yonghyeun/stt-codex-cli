@@ -23,10 +23,13 @@ CUDA 실행이 필요하면 추가 설치한다.
 .venv/bin/pip install -r requirements-cuda.txt
 ```
 
-`scripts/transcribe.sh`는 venv에 설치된 CUDA library path를 자동으로 `LD_LIBRARY_PATH`에 추가한다.
+`scripts/transcribe.sh`와 `scripts/transcribe_worker.sh`는 venv에 설치된 CUDA library
+path를 자동으로 `LD_LIBRARY_PATH`에 추가한다.
 
 분리된 worktree에서 이미 준비된 venv를 재사용해야 하면 환경변수로 Python과
-site-packages 위치를 지정할 수 있다. 기본값은 repo root의 `.venv`다.
+site-packages 위치를 지정할 수 있다. 명시값이 없으면 현재 worktree `.venv`를
+먼저 찾고, 없으면 `git worktree` 기준 main/primary worktree의 `.venv`를 fallback으로
+사용한다.
 
 ```bash
 STT_PYTHON_BIN=/path/to/.venv/bin/python \
@@ -716,6 +719,8 @@ scripts/stt_codex.py --stt-backend subprocess
 - 기본 backend는 `worker`다.
 - `worker` backend는 `scripts/transcribe_worker.sh`가 CUDA library path를 준비한 뒤
   `scripts/transcribe_worker.py`를 long-lived process로 실행한다.
+- 현재 worktree에 `.venv`가 없으면 worker/subprocess launcher 모두 main/primary
+  worktree의 `.venv`를 자동 fallback으로 사용한다.
 - `--audio-handoff auto`는 worker backend에서 `--save-run`과 `--keep-audio`가 꺼진
   경우 buffer를 사용한다.
 - `--save-run` 또는 `--keep-audio`가 켜지면 audio 보존 계약을 우선해 file handoff를
