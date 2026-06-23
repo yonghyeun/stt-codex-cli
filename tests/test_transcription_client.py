@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import base64
+import json
 import subprocess
 import tempfile
 import unittest
@@ -146,14 +148,17 @@ class FakeInfo:
 class FakeWorkerModel:
     def __init__(self, transcripts: Sequence[str]) -> None:
         self._transcripts = list(transcripts)
-        self.calls: list[tuple[str, dict[str, Any]]] = []
+        self.calls: list[tuple[object, dict[str, Any]]] = []
 
     def transcribe(
         self,
-        audio_file: str,
+        audio_file: object,
         **kwargs: Any,
     ) -> tuple[list[FakeSegment], FakeInfo]:
-        self.calls.append((audio_file, kwargs))
+        captured_audio = audio_file
+        if hasattr(audio_file, "read"):
+            captured_audio = audio_file.read()
+        self.calls.append((captured_audio, kwargs))
         transcript = self._transcripts.pop(0)
         return [FakeSegment(transcript)], FakeInfo()
 
@@ -248,6 +253,30 @@ class SubprocessTranscriptionClientTest(unittest.TestCase):
             self.assertIn("--no-vad-filter", command)
             self.assertNotIn("--initial-prompt", command)
 
+    def test_transcribe_can_pass_empty_initial_prompt_override(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            runner = RecordingRunner()
+            client = SubprocessTranscriptionClient(
+                repo_root=Path(temp_dir),
+                config=TranscriptionConfig(
+                    model="tiny",
+                    language="ko",
+                    device="cpu",
+                    compute_type="int8",
+                    beam_size=1,
+                    initial_prompt="",
+                    vad_filter=True,
+                ),
+                status=lambda message: None,
+                runner=runner,
+            )
+
+            client.transcribe(TranscriptionRequest(audio_file=Path("audio.wav")))
+
+            command, _ = runner.calls[0]
+            self.assertIn("--initial-prompt", command)
+            self.assertEqual(command[command.index("--initial-prompt") + 1], "")
+
     def test_transcribe_raises_on_subprocess_failure(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             runner = RecordingRunner(returncode=42, stderr="boom\n")
@@ -339,6 +368,61 @@ class PersistentWorkerTranscriptionClientTest(unittest.TestCase):
                 statuses,
                 ["starting stt worker...", "transcribing...", "transcribing..."],
             )
+
+    def test_buffer_request_sends_base64_audio_to_worker(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            factory = FakeWorkerFactory(['{"ok": true, "transcript": "buffered"}\n'])
+            client = PersistentWorkerTranscriptionClient(
+                repo_root=Path(temp_dir),
+                config=TranscriptionConfig(
+                    model="tiny",
+                    language="ko",
+                    device="cpu",
+                    compute_type="int8",
+                    beam_size=1,
+                    initial_prompt=None,
+                    vad_filter=True,
+                ),
+                status=lambda message: None,
+                process_factory=factory,
+            )
+
+            result = client.transcribe(
+                TranscriptionRequest(audio_bytes=b"RIFF fake wav", audio_format="wav")
+            )
+
+            self.assertEqual(result.transcript, "buffered")
+            payload = json.loads(factory.processes[0].stdin.lines[0])
+            self.assertNotIn("audio_file", payload)
+            self.assertEqual(payload["audio_format"], "wav")
+            self.assertEqual(
+                payload["audio_bytes_b64"],
+                base64.b64encode(b"RIFF fake wav").decode("ascii"),
+            )
+
+    def test_worker_command_can_pass_empty_initial_prompt_override(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            factory = FakeWorkerFactory(['{"ok": true, "transcript": "done"}\n'])
+            client = PersistentWorkerTranscriptionClient(
+                repo_root=Path(temp_dir),
+                config=TranscriptionConfig(
+                    model="tiny",
+                    language="ko",
+                    device="cpu",
+                    compute_type="int8",
+                    beam_size=1,
+                    initial_prompt="",
+                    vad_filter=True,
+                ),
+                status=lambda message: None,
+                process_factory=factory,
+            )
+
+            client.transcribe(TranscriptionRequest(audio_file=Path("audio.wav")))
+
+            command, _ = factory.calls[0]
+            self.assertIn("--initial-prompt", command)
+            self.assertEqual(command[command.index("--initial-prompt") + 1], "")
 
     def test_close_terminates_worker_process(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -502,6 +586,45 @@ class TranscribeWorkerScriptTest(unittest.TestCase):
             self.assertIn('"transcript": "first transcript"', responses[0])
             self.assertIn('"transcript": "second"', responses[1])
             self.assertIn("worker ready", stderr.getvalue())
+
+    def test_worker_accepts_wav_buffer_request(self) -> None:
+        audio_bytes = b"RIFF fake wav"
+        model_factory = FakeWorkerModelFactory(["buffer transcript"])
+        args = transcribe_worker.WorkerConfig(
+            model="tiny",
+            language="ko",
+            device="cpu",
+            compute_type="int8",
+            beam_size=1,
+            initial_prompt=None,
+            model_dir=None,
+            vad_filter=True,
+        )
+        stdin = StringIO(
+            json.dumps(
+                {
+                    "audio_bytes_b64": base64.b64encode(audio_bytes).decode("ascii"),
+                    "audio_format": "wav",
+                }
+            )
+            + "\n"
+        )
+        stdout = StringIO()
+        stderr = StringIO()
+
+        exit_code = transcribe_worker.run_worker(
+            args,
+            stdin=stdin,
+            stdout=stdout,
+            stderr=stderr,
+            model_factory=model_factory,
+        )
+
+        response = json.loads(stdout.getvalue().strip())
+        self.assertEqual(exit_code, 0)
+        self.assertTrue(response["ok"])
+        self.assertEqual(response["handoff"], "buffer")
+        self.assertEqual(model_factory.model.calls[0][0], audio_bytes)
 
 
 if __name__ == "__main__":

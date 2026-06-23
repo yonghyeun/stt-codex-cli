@@ -2,6 +2,9 @@
 from __future__ import annotations
 
 import argparse
+import base64
+import binascii
+import io
 import json
 import os
 import sys
@@ -36,7 +39,7 @@ class TranscriptionInfoLike(Protocol):
 class WorkerModel(Protocol):
     def transcribe(
         self,
-        audio_file: str,
+        audio_file: object,
         **kwargs: object,
     ) -> tuple[Iterable[SegmentLike], TranscriptionInfoLike]:
         ...
@@ -64,6 +67,13 @@ class WorkerConfig:
     initial_prompt: str | None
     model_dir: str | None
     vad_filter: bool
+
+
+@dataclass(frozen=True)
+class WorkerAudioInput:
+    source: object
+    label: str
+    handoff: str
 
 
 def env_flag(name: str, default: bool) -> bool:
@@ -195,12 +205,12 @@ def write_response(stdout: TextIO, response: dict[str, object]) -> None:
 def transcribe_audio(
     *,
     model: WorkerModel,
-    audio_file: Path,
+    audio_source: object,
     config: WorkerConfig,
 ) -> tuple[str, TranscriptionInfoLike, int, float]:
     started_at = time.monotonic()
     segments, info = model.transcribe(
-        str(audio_file),
+        audio_source,
         language=language_arg(config.language),
         beam_size=config.beam_size,
         initial_prompt=initial_prompt_arg(config.initial_prompt),
@@ -219,6 +229,46 @@ def transcribe_audio(
     return " ".join(parts).strip(), info, segment_count, time.monotonic() - started_at
 
 
+def audio_input_from_request(request: dict[str, object]) -> WorkerAudioInput:
+    audio_value = request.get("audio_file")
+    buffer_value = request.get("audio_bytes_b64")
+    has_audio_file = audio_value is not None
+    has_buffer = buffer_value is not None
+    if has_audio_file == has_buffer:
+        raise ValueError("request must include exactly one of audio_file or audio_bytes_b64")
+
+    if has_audio_file:
+        if not isinstance(audio_value, str) or not audio_value:
+            raise ValueError("request.audio_file must be a non-empty string")
+        audio_file = Path(audio_value)
+        if not audio_file.exists():
+            raise FileNotFoundError(f"audio file not found: {audio_file}")
+        return WorkerAudioInput(
+            source=str(audio_file),
+            label=str(audio_file),
+            handoff="file",
+        )
+
+    if not isinstance(buffer_value, str) or not buffer_value:
+        raise ValueError("request.audio_bytes_b64 must be a non-empty string")
+    try:
+        audio_bytes = base64.b64decode(buffer_value, validate=True)
+    except binascii.Error as error:
+        raise ValueError("request.audio_bytes_b64 must be valid base64") from error
+    if not audio_bytes:
+        raise ValueError("request.audio_bytes_b64 must not decode to empty bytes")
+    audio_format = request.get("audio_format", "wav")
+    if not isinstance(audio_format, str) or not audio_format:
+        raise ValueError("request.audio_format must be a non-empty string")
+    audio_stream = io.BytesIO(audio_bytes)
+    audio_stream.name = f"buffer.{audio_format}"
+    return WorkerAudioInput(
+        source=audio_stream,
+        label=f"<buffer:{len(audio_bytes)} bytes>",
+        handoff="buffer",
+    )
+
+
 def handle_request(
     *,
     line: str,
@@ -231,16 +281,11 @@ def handle_request(
         request = json.loads(line)
         if not isinstance(request, dict):
             raise ValueError("request must be a JSON object")
-        audio_value = request.get("audio_file")
-        if not isinstance(audio_value, str) or not audio_value:
-            raise ValueError("request.audio_file must be a non-empty string")
-        audio_file = Path(audio_value)
-        if not audio_file.exists():
-            raise FileNotFoundError(f"audio file not found: {audio_file}")
+        audio_input = audio_input_from_request(request)
 
         transcript, info, segment_count, elapsed = transcribe_audio(
             model=model,
-            audio_file=audio_file,
+            audio_source=audio_input.source,
             config=config,
         )
         write_response(
@@ -250,11 +295,12 @@ def handle_request(
                 "transcript": transcript,
                 "segment_count": segment_count,
                 "audio_duration_seconds": round(info.duration, 6),
+                "handoff": audio_input.handoff,
             },
         )
         print(
             "transcribed: "
-            f"audio={audio_file} language={info.language} "
+            f"audio={audio_input.label} language={info.language} "
             f"probability={info.language_probability:.3f} "
             f"duration={info.duration:.2f}s elapsed={elapsed:.2f}s",
             file=stderr,
