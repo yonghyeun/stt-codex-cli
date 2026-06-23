@@ -27,6 +27,22 @@ def compact_parent_status(message: str) -> ParentStatusMessage | None:
     if normalized == "starting stt worker...":
         return ParentStatusMessage("STT loading model | wait")
 
+    if normalized == "starting stt daemon...":
+        return ParentStatusMessage("STT daemon starting | wait")
+
+    queued_match = re.match(r"daemon queue: queued ([0-9]+)/([0-9]+)", normalized)
+    if queued_match:
+        suffix = "next" if queued_match.group(1) == "1" else "wait"
+        return ParentStatusMessage(
+            f"STT queued {queued_match.group(1)}/{queued_match.group(2)} | {suffix}"
+        )
+
+    if normalized == "daemon queue: running":
+        return ParentStatusMessage("STT running | wait")
+
+    if normalized == "daemon queue: unknown":
+        return ParentStatusMessage("STT transcribing | queue unknown")
+
     injected_match = re.match(r"injected transcript ([0-9]+) chars;", normalized)
     if injected_match:
         return ParentStatusMessage(

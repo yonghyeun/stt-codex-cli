@@ -86,6 +86,9 @@ def default_daemon_socket_dir() -> Path:
     return Path.home() / ".cache" / "stt-codex-cli"
 
 
+DEFAULT_DAEMON_STATS_INTERVAL_SECONDS = 0.5
+
+
 def _slug_for_socket(value: str) -> str:
     slug = re.sub(r"[^a-z0-9_.-]+", "-", value.lower()).strip("-")
     return slug or "value"
@@ -427,6 +430,7 @@ class DaemonTranscriptionClient:
         socket_dir: Path | None = None,
         idle_timeout_seconds: float = 300.0,
         start_timeout_seconds: float = 30.0,
+        stats_interval_seconds: float = DEFAULT_DAEMON_STATS_INTERVAL_SECONDS,
         process_factory: DaemonProcessFactory = subprocess.Popen,
         request_fn: DaemonRequestFn | None = None,
         wait_for_socket: DaemonWaitFn | None = None,
@@ -438,12 +442,15 @@ class DaemonTranscriptionClient:
         self._config_id = daemon_config_id(config)
         self._idle_timeout_seconds = idle_timeout_seconds
         self._start_timeout_seconds = start_timeout_seconds
+        self._stats_interval_seconds = stats_interval_seconds
         self._process_factory = process_factory
         self._request_fn = request_fn or request_daemon
         self._wait_for_socket = wait_for_socket or wait_for_daemon_socket
+        self._next_request_sequence = 0
 
     def transcribe(self, request: TranscriptionRequest) -> TranscriptionResult:
         payload = self._request_payload(request)
+        payload["request_id"] = self._next_request_id()
         try:
             response = self._request(payload, announce=self._socket_path.exists())
         except OSError as error:
@@ -478,11 +485,59 @@ class DaemonTranscriptionClient:
     ) -> dict[str, object]:
         if announce:
             self._status("transcribing...")
-        return self._request_fn(
-            self._socket_path,
-            payload,
-            timeout_seconds=self._start_timeout_seconds,
-        )
+        return self._request_with_stats_polling(payload)
+
+    def _request_with_stats_polling(
+        self,
+        payload: dict[str, object],
+    ) -> dict[str, object]:
+        done = threading.Event()
+        responses: list[dict[str, object]] = []
+        errors: list[Exception] = []
+
+        def request_transcription() -> None:
+            try:
+                responses.append(
+                    self._request_fn(
+                        self._socket_path,
+                        payload,
+                        timeout_seconds=self._start_timeout_seconds,
+                    )
+                )
+            except Exception as error:
+                errors.append(error)
+            finally:
+                done.set()
+
+        thread = threading.Thread(target=request_transcription, daemon=True)
+        thread.start()
+        while not done.wait(self._stats_interval_seconds):
+            request_id = payload.get("request_id")
+            if isinstance(request_id, str):
+                self._poll_daemon_stats(request_id)
+        thread.join()
+
+        if errors:
+            raise errors[0]
+        if not responses:
+            raise RuntimeError("STT daemon stopped without response")
+        return responses[0]
+
+    def _poll_daemon_stats(self, request_id: str) -> None:
+        try:
+            stats = self._request_fn(
+                self._socket_path,
+                {
+                    "type": "stats",
+                    "config_id": self._config_id,
+                    "request_id": request_id,
+                },
+                timeout_seconds=min(self._start_timeout_seconds, 1.0),
+            )
+        except Exception:
+            self._status("daemon queue: unknown")
+            return
+        self._status(daemon_queue_status_message(stats))
 
     def _start_daemon(self) -> None:
         if self._socket_path.exists():
@@ -535,6 +590,21 @@ class DaemonTranscriptionClient:
             raise RuntimeError("daemon transcription requires audio input")
         payload["audio_file"] = str(request.audio_file)
         return payload
+
+    def _next_request_id(self) -> str:
+        self._next_request_sequence += 1
+        return f"client-{os.getpid()}-{self._next_request_sequence:06d}"
+
+
+def daemon_queue_status_message(stats: dict[str, object]) -> str:
+    own_state = stats.get("own_request_state")
+    own_rank = stats.get("own_queue_rank")
+    active_count = stats.get("active_request_count")
+    if own_state == "queued" and isinstance(own_rank, int) and isinstance(active_count, int):
+        return f"daemon queue: queued {own_rank}/{active_count}"
+    if own_state == "running":
+        return "daemon queue: running"
+    return "daemon queue: unknown"
 
 
 def request_daemon(

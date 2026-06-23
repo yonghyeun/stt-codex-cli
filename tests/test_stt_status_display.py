@@ -25,6 +25,28 @@ class ParentStatusMessageTest(unittest.TestCase):
             compact_parent_status("transcribing..."),
             ParentStatusMessage("STT transcribing | wait"),
         )
+        self.assertEqual(
+            compact_parent_status("starting stt daemon..."),
+            ParentStatusMessage("STT daemon starting | wait"),
+        )
+
+    def test_compacts_daemon_queue_status_for_user_status_bar(self) -> None:
+        self.assertEqual(
+            compact_parent_status("daemon queue: queued 2/4"),
+            ParentStatusMessage("STT queued 2/4 | wait"),
+        )
+        self.assertEqual(
+            compact_parent_status("daemon queue: queued 1/3"),
+            ParentStatusMessage("STT queued 1/3 | next"),
+        )
+        self.assertEqual(
+            compact_parent_status("daemon queue: running"),
+            ParentStatusMessage("STT running | wait"),
+        )
+        self.assertEqual(
+            compact_parent_status("daemon queue: unknown"),
+            ParentStatusMessage("STT transcribing | queue unknown"),
+        )
 
     def test_compacts_injection_empty_and_short_recording_outcomes(self) -> None:
         self.assertEqual(
