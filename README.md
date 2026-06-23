@@ -97,7 +97,7 @@ Current mini-layer modules:
 - `stt_runtime/terminal.py`: terminal raw mode, cwd validation, window-size sync.
 - `stt_runtime/child_process.py`: child PTY spawn과 wait status 처리.
 - `stt_runtime/recording.py`: temporary WAV와 `arecord` recording lifecycle.
-- `stt_runtime/transcription.py`: `scripts/transcribe.sh` subprocess adapter와 `scripts/transcribe_worker.sh` persistent worker adapter.
+- `stt_runtime/transcription.py`: `scripts/transcribe.sh` subprocess adapter, `scripts/transcribe_worker.sh` persistent worker adapter, shared daemon client adapter.
 - `stt_runtime/run_artifacts.py`: `--save-run` artifact persistence.
 - `stt_features/codex_input.py`: fixed-text injection과 Ctrl+T STT injection flow.
 
@@ -219,9 +219,21 @@ scripts/stt_codex.py
 scripts/stt_codex.py --stt-backend daemon --stt-model large-v3 --stt-device cuda --stt-compute-type int8_float16
 ```
 
-Daemon backend는 `model`, `device`, `compute_type`으로 정의되는 load-time config 단위로 socket을 나눈다. 같은 load-time config는 같은 daemon을 재사용하고, `language`, `beam_size`, `initial_prompt`, `vad_filter`는 request마다 전달한다. 한 daemon 안의 STT request는 GPU VRAM 중복 점유를 피하기 위해 순차 처리한다.
+Daemon backend는 `model`, `device`, `compute_type`으로 정의되는 load-time config 단위로 socket을 나눈다. 같은 load-time config는 같은 daemon을 재사용하고, `language`, `beam_size`, `initial_prompt`, `vad_filter`는 request마다 전달한다. 한 daemon 안의 STT request는 GPU VRAM 중복 점유를 피하기 위해 명시 FIFO queue로 순차 처리한다.
 
-Daemon은 active request가 없고 마지막 request 완료 후 기본 `600s`가 지나면 종료한다. 종료하면 socket이 제거되고 loaded model과 VRAM 점유도 해제된다.
+Daemon request는 `request_id`, queue rank, queued/running/done/error 상태 metadata를 가진다. `type=stats` control-plane request는 transcription queue에 들어가지 않고 현재 running request, queued request count, active request count, own queue rank, idle timeout remaining을 반환한다. Wrapper는 daemon transcription 응답을 기다리는 동안에만 stats를 polling하고, idle/녹음 중/삽입 완료 상태에서는 polling하지 않는다.
+
+Daemon backend 사용 중 하단 status bar는 queue 상태를 사용자-facing 문구로 표시한다.
+
+```text
+STT daemon starting | wait
+STT queued 2/4 | wait
+STT queued 1/3 | next
+STT running | wait
+STT transcribing | queue unknown
+```
+
+Daemon은 active transcription request가 없고 마지막 transcription request 완료 후 기본 `600s`가 지나면 종료한다. Stats request는 transcription queue에 들어가지 않고 idle timeout 기준도 연장하지 않는다. 종료하면 socket이 제거되고 loaded model과 VRAM 점유도 해제된다.
 
 STT launcher는 `STT_PYTHON_BIN`을 명시하면 그 Python을 최우선으로 사용한다. 명시값이 없으면 현재 worktree의 `.venv`를 먼저 찾고, 없으면 `git worktree` 기준 main/primary worktree의 `.venv`를 fallback으로 사용한다. 따라서 issue worktree에서 실행해도 main workspace의 준비된 venv를 재사용할 수 있다.
 
