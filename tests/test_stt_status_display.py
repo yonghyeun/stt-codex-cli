@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import unittest
+from io import StringIO
 
 from stt_core.status import (
     ParentStatusMessage,
     compact_parent_status,
     summarize_stt_error,
 )
+from stt_runtime.terminal import TerminalStatusRenderer, adjusted_child_size
 
 
 class ParentStatusMessageTest(unittest.TestCase):
@@ -57,6 +59,64 @@ class ParentStatusMessageTest(unittest.TestCase):
                 "stt error: STT worker failed: CUDA failed with error out of memory"
             ),
             ParentStatusMessage("STT failed: GPU memory 부족 | Ctrl+T retry"),
+        )
+
+
+class TerminalStatusRendererTest(unittest.TestCase):
+    def test_adjusted_child_size_reserves_status_bar_row(self) -> None:
+        self.assertEqual(adjusted_child_size(24, 80, reserved_rows=1), (23, 80))
+        self.assertEqual(adjusted_child_size(1, 80, reserved_rows=1), (1, 80))
+
+    def test_interactive_renderer_updates_bottom_line_without_newline(self) -> None:
+        stream = StringIO()
+        renderer = TerminalStatusRenderer(
+            stream=stream,
+            enabled=True,
+            color=False,
+            debug=False,
+            interactive=True,
+            terminal_size=lambda: (24, 40),
+        )
+
+        renderer("recording started: in-memory audio buffer")
+
+        self.assertEqual(
+            stream.getvalue(),
+            "\033[s\033[24;1H\033[2KSTT recording | Ctrl+T stop\033[u",
+        )
+
+    def test_default_renderer_hides_verbose_status_noise(self) -> None:
+        stream = StringIO()
+        renderer = TerminalStatusRenderer(
+            stream=stream,
+            enabled=True,
+            color=False,
+            debug=False,
+            interactive=False,
+            terminal_size=lambda: (24, 80),
+        )
+
+        renderer("released in-memory audio buffer")
+        renderer("stt: language=ko probability=1.000")
+
+        self.assertEqual(stream.getvalue(), "")
+
+    def test_debug_renderer_emits_raw_parent_lines(self) -> None:
+        stream = StringIO()
+        renderer = TerminalStatusRenderer(
+            stream=stream,
+            enabled=True,
+            color=False,
+            debug=True,
+            interactive=False,
+            terminal_size=lambda: (24, 80),
+        )
+
+        renderer("stt: language=ko probability=1.000")
+
+        self.assertEqual(
+            stream.getvalue(),
+            "[stt-parent] stt: language=ko probability=1.000\n",
         )
 
 

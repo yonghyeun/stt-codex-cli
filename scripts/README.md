@@ -66,6 +66,14 @@ codex-stt --stt-model large-v3 --stt-device cuda --stt-compute-type float16
 codex-stt --stt-backend subprocess
 ```
 
+기본 실행은 terminal 하단 1줄에 STT 상태만 표시한다. `recording`, `transcribing`,
+`inserted`, `empty`, `failed` 같은 사용자-facing 상태만 표시하고 반복 parent 로그는
+숨긴다. raw `[stt-parent]` diagnostic line이 필요하면 debug mode를 켠다.
+
+```bash
+codex-stt --debug-stt
+```
+
 repo가 기본 위치가 아닌 곳에 있으면 runtime override를 사용한다.
 
 ```bash
