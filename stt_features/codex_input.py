@@ -21,6 +21,7 @@ from stt_runtime.recording import (
 from stt_runtime.run_artifacts import save_run_artifacts
 from stt_runtime.terminal import copy_window_size
 from stt_runtime.transcription import (
+    DaemonTranscriptionClient,
     PersistentWorkerTranscriptionClient,
     SubprocessTranscriptionClient,
     TranscriptionClient,
@@ -77,6 +78,16 @@ def create_transcription_client(
             config=config,
             status=status,
         )
+    if backend == "daemon":
+        socket_dir = getattr(args, "stt_daemon_socket_dir", None)
+        return DaemonTranscriptionClient(
+            repo_root=repo_root,
+            config=config,
+            status=status,
+            socket_dir=Path(socket_dir) if socket_dir else None,
+            idle_timeout_seconds=float(getattr(args, "stt_daemon_idle_timeout", 300.0)),
+            start_timeout_seconds=float(getattr(args, "stt_daemon_start_timeout", 30.0)),
+        )
     raise RuntimeError(f"unsupported STT backend: {backend}")
 
 
@@ -89,12 +100,12 @@ def resolve_audio_handoff(args: object) -> str:
     if requested == "file":
         return "file"
     if requested == "buffer":
-        if backend == "worker" and not save_run and not keep_audio:
+        if backend in {"worker", "daemon"} and not save_run and not keep_audio:
             return "buffer"
         return "file"
     if requested != "auto":
         raise RuntimeError(f"unsupported audio handoff: {requested}")
-    if backend == "worker" and not save_run and not keep_audio:
+    if backend in {"worker", "daemon"} and not save_run and not keep_audio:
         return "buffer"
     return "file"
 

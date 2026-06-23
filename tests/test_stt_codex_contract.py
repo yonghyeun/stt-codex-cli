@@ -167,6 +167,23 @@ class RuntimeDefaultContractTest(unittest.TestCase):
         self.assertEqual(args.stt_backend, "subprocess")
         self.assertEqual(stt_codex.resolve_audio_handoff(args), "file")
 
+    def test_daemon_override_uses_buffer_handoff_and_daemon_timeouts(self) -> None:
+        args = self.parse_with(
+            [
+                "--stt-backend",
+                "daemon",
+                "--stt-daemon-idle-timeout",
+                "120",
+                "--stt-daemon-start-timeout",
+                "3",
+            ]
+        )
+
+        self.assertEqual(args.stt_backend, "daemon")
+        self.assertEqual(stt_codex.resolve_audio_handoff(args), "buffer")
+        self.assertEqual(args.stt_daemon_idle_timeout, 120.0)
+        self.assertEqual(args.stt_daemon_start_timeout, 3.0)
+
 
 class ParentStatusWiringTest(unittest.TestCase):
     def parse_with(
