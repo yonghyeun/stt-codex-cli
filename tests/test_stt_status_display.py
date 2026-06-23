@@ -15,7 +15,7 @@ class ParentStatusMessageTest(unittest.TestCase):
     def test_compacts_recording_lifecycle_for_user_status_bar(self) -> None:
         self.assertEqual(
             compact_parent_status("recording started: in-memory audio buffer"),
-            ParentStatusMessage("STT recording | Ctrl+T stop"),
+            ParentStatusMessage("STT recording 중 | Ctrl+T stop"),
         )
         self.assertEqual(
             compact_parent_status("recording stopped: elapsed=0.58s"),
@@ -82,7 +82,7 @@ class TerminalStatusRendererTest(unittest.TestCase):
 
         self.assertEqual(
             stream.getvalue(),
-            "\033[s\033[24;1H\033[2KSTT recording | Ctrl+T stop\033[u",
+            "\033[s\033[24;1H\033[2KSTT recording 중 | Ctrl+T stop\033[u",
         )
 
     def test_interactive_renderer_clamps_zero_sized_terminal_rows(self) -> None:
@@ -100,7 +100,7 @@ class TerminalStatusRendererTest(unittest.TestCase):
 
         self.assertEqual(
             stream.getvalue(),
-            "\033[s\033[1;1H\033[2KSTT recording | Ctrl+T stop\033[u",
+            "\033[s\033[1;1H\033[2KSTT recording 중 | Ctrl+T stop\033[u",
         )
 
     def test_default_renderer_hides_verbose_status_noise(self) -> None:

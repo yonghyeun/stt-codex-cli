@@ -36,6 +36,7 @@ class RecordingState:
     started_at: float | None = None
     started_wall_at: datetime | None = None
     last_trigger_at: float | None = None
+    stop_requested: bool = False
 
     def active(self) -> bool:
         return self.process is not None
@@ -131,6 +132,7 @@ def start_recording(
     state.started_at = time.monotonic()
     state.started_wall_at = datetime.now().astimezone()
     state.last_trigger_at = state.started_at
+    state.stop_requested = False
     if audio_file is not None:
         status(f"recording started: {audio_file}")
     else:
@@ -180,6 +182,7 @@ def stop_recording_result(
     state.started_at = None
     state.started_wall_at = None
     state.last_trigger_at = None
+    state.stop_requested = False
     status(f"recording stopped: elapsed={elapsed:.2f}s")
     return RecordedAudio(
         audio_file=audio_file,

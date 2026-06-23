@@ -15,7 +15,7 @@ def compact_parent_status(message: str) -> ParentStatusMessage | None:
         return None
 
     if normalized.startswith("recording started:"):
-        return ParentStatusMessage("STT recording | Ctrl+T stop")
+        return ParentStatusMessage("STT recording 중 | Ctrl+T stop")
 
     stopped_match = re.match(r"recording stopped: elapsed=([0-9.]+)s", normalized)
     if stopped_match:
