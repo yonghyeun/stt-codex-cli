@@ -223,6 +223,35 @@ STT_PTT_PROFILE=speed scripts/stt_codex.py
 STT_PTT_RELEASE_GAP=0.5 scripts/stt_codex.py
 ```
 
+### Speed/Accuracy Decision Surface
+
+기본값은 정확도 우선이다. `scripts/stt_codex.py` 기본 실행은 `--ptt-profile accuracy`,
+`--stt-beam-size 5`, VAD on, `--stt-backend subprocess` 기준이다. Speed path는
+명시적으로 켠다.
+
+| 선택 | 현재 command/config | latency evidence | accuracy evidence | 결정 |
+| --- | --- | ---: | ---: | --- |
+| 기본 PTT | `--ptt-profile accuracy` 또는 생략 | release gap `0.75s` | release-gap leaf에서 STT 재측정 없음 | 기본값 |
+| PTT speed | `--ptt-profile speed` | stop-wait `0.75s -> 0.35s`, deterministic delta `-0.40s` | live truncation 미측정 | opt-in |
+| worker file | `--stt-backend worker --audio-handoff file` | fixed smoke avg `2.619s`, #29 subprocess `5.956s` 대비 `-3.337s` | score `0.6423`, normalized CER `0.3156` | speed path |
+| worker buffer | `--stt-backend worker --audio-handoff buffer` | fixed smoke avg `2.536s`, #29 대비 `-3.420s`, worker file 대비 `-0.083s` | score `0.6423`, normalized CER `0.3156` | speed path |
+| beam5 VAD on | `--stt-beam-size 5`, VAD on | fixed smoke avg `5.191s` | score `0.6423`, normalized CER `0.3156` | beam/VAD 기본값 |
+| beam1 VAD on | `--stt-beam-size 1` | avg `5.173s`, default `5.191s` 대비 `-0.018s`, #29 대비 `-0.783s` | score `0.6423`, normalized CER `0.3156` | fixed-smoke-only 후보 |
+| VAD off | `--stt-no-vad-filter` | avg `5.334s`/`5.111s` | score `0.6233`, normalized CER `0.3394`, `cmd-0002` floor 실패 | 제외 |
+
+Fixed smoke latency input은 `evals/inputs/speech/v1`의 `cmd-0002`, `cmd-0018`,
+`cmd-0021`, `cmd-0024`다. 이 결과는 full suite 측정이 아니다. Worker file/buffer
+latency는 persistent worker request wall time이며 live `arecord` stop latency,
+child PTY injection latency, terminal render latency를 포함하지 않는다.
+
+#28 closeout의 최종 latency/accuracy 요약 위치는 이 section과
+`scripts/README.md`의 speed tradeoff section이다. 세부 evidence report는
+`evals/stt_accuracy/reports/2026-06-23-buffer-handoff.md`,
+`evals/stt_accuracy/reports/2026-06-23-release-gap-speed-profile.md`,
+`evals/stt_accuracy/reports/2026-06-23-beam-vad-tradeoff.md`에 둔다. Report와
+local-only run artifact의 소유권은 `evals/stt_accuracy/reports/2026-06-21-governance.md`
+와 `evals/stt_accuracy/reports/README.md`를 따른다.
+
 실행 후 사용자는 `Ctrl+T`를 누르고 말한다. `Ctrl+T` 반복 입력이 끊기면 wrapper가 녹음을 종료하고 STT raw transcript를 Codex CLI 입력창에 삽입한다. Enter는 사용자가 직접 누른다.
 
 실제 발화 audio와 transcript를 남겨 비교해야 할 때만 저장 option을 켠다.
