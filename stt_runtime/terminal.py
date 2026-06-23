@@ -118,14 +118,19 @@ class TerminalStatusRenderer:
         ):
             return
         try:
-            _, columns = self.terminal_size()
+            rows, columns = self.terminal_size()
         except OSError:
             return
-        self.stream.write("\033[s")
-        for offset, line in enumerate(self.parent_panel, start=1):
+        rows = max(1, rows)
+        visible_panel_rows = min(len(self.parent_panel), max(0, rows - 2))
+        if visible_panel_rows == 0:
+            self.stream.write("\033[1;1H")
+            self.stream.flush()
+            return
+        for offset, line in enumerate(self.parent_panel[:visible_panel_rows], start=1):
             display = self._truncate(line, columns)
             self.stream.write(f"\033[{offset};1H\033[2K{display}")
-        self.stream.write("\033[u")
+        self.stream.write(f"\033[{visible_panel_rows + 1};1H")
         self.stream.flush()
 
     def set_status(self, text: str) -> None:

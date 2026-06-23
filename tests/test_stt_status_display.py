@@ -97,7 +97,28 @@ class TerminalStatusRendererTest(unittest.TestCase):
 
         self.assertEqual(
             stream.getvalue(),
-            "\033[s\033[1;1H\033[2Kparent\033[2;1H\033[2Kpanel\033[u",
+            "\033[1;1H\033[2Kparent\033[2;1H\033[2Kpanel\033[3;1H",
+        )
+
+    def test_interactive_renderer_clips_parent_panel_to_leave_child_and_status_rows(
+        self,
+    ) -> None:
+        stream = StringIO()
+        renderer = TerminalStatusRenderer(
+            stream=stream,
+            enabled=True,
+            color=False,
+            debug=False,
+            interactive=True,
+            terminal_size=lambda: (3, 40),
+            parent_panel=("parent", "panel", "extra"),
+        )
+
+        renderer.render_parent_panel()
+
+        self.assertEqual(
+            stream.getvalue(),
+            "\033[1;1H\033[2Kparent\033[2;1H",
         )
 
     def test_debug_renderer_does_not_reserve_parent_panel_rows(self) -> None:
