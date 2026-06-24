@@ -29,7 +29,8 @@
 ## 작업 경계
 
 - 실험은 작은 commit 단위로 나눈다.
-- STT 결과를 Codex CLI에 자동 전송하지 않는다.
+- 기본값에서는 STT 결과를 Codex CLI에 자동 전송하지 않는다.
+- 자동 전송은 명시 opt-in 실험 기능으로만 다룬다.
 - 현재 1차 UX는 Codex CLI child PTY 입력창에 STT raw transcript를 삽입하는 흐름이다.
 - 오인식 가능성이 있는 문장은 사용자가 확인 후 전송한다.
 - GitHub 원격 계약은 `origin`과 repo-local task lifecycle skill로 관리한다.

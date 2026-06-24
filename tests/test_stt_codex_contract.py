@@ -32,6 +32,7 @@ def make_args(**overrides: object) -> argparse.Namespace:
         "stt_no_vad_filter": False,
         "stt_initial_prompt": stt_codex.DEFAULT_STT_INITIAL_PROMPT,
         "cwd": None,
+        "submit_mode": "review",
     }
     values.update(overrides)
     return argparse.Namespace(**values)
@@ -141,6 +142,19 @@ class PttReleaseGapContractTest(unittest.TestCase):
         args = self.parse_with()
 
         self.assertEqual(stt_codex.initial_parent_status(args), "STT idle | ctrl+t start")
+
+    def test_submit_mode_defaults_to_review_and_can_be_auto(self) -> None:
+        self.assertEqual(self.parse_with().submit_mode, "review")
+        self.assertEqual(self.parse_with(["--submit-mode", "auto"]).submit_mode, "auto")
+
+    def test_submit_mode_env_overrides_default(self) -> None:
+        args = self.parse_with(env={"STT_SUBMIT_MODE": "auto"})
+
+        self.assertEqual(args.submit_mode, "auto")
+
+    def test_submit_mode_rejects_unknown_values(self) -> None:
+        with self.assertRaises(SystemExit):
+            self.parse_with(["--submit-mode", "send-now"])
 
 
 class RuntimeDefaultContractTest(unittest.TestCase):
@@ -299,6 +313,8 @@ class RunArtifactTest(unittest.TestCase):
             self.assertEqual(metadata["schema_version"], 1)
             self.assertEqual(metadata["outcome"], "injected")
             self.assertTrue(metadata["injected"])
+            self.assertEqual(metadata["submit_mode"], "review")
+            self.assertFalse(metadata["submitted"])
             self.assertEqual(metadata["transcript_chars"], 5)
             self.assertTrue(metadata["transcript_has_text"])
             self.assertEqual(metadata["audio_file"], "audio.wav")
@@ -308,6 +324,36 @@ class RunArtifactTest(unittest.TestCase):
                 stt_codex.DEFAULT_STT_INITIAL_PROMPT,
             )
             self.assertEqual(metadata["child"]["command"], ["codex", "--no-alt-screen"])
+
+    def test_save_run_records_auto_submit_metadata(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            audio_file = Path(temp_dir) / "audio.wav"
+            output_dir = Path(temp_dir) / "runs"
+            audio_file.write_bytes(b"fake wav")
+            args = make_args(
+                save_run=True,
+                run_output_dir=str(output_dir),
+                submit_mode="auto",
+            )
+
+            run_dir = stt_codex.save_run_artifacts(
+                args,
+                audio_file,
+                "안녕하세요",
+                started_at=datetime(2026, 6, 20, 1, 2, 3, 456000, tzinfo=timezone.utc),
+                elapsed=1.234,
+                injected=True,
+                submitted=True,
+                outcome="submitted",
+            )
+
+            self.assertIsNotNone(run_dir)
+            assert run_dir is not None
+            metadata = json.loads((run_dir / "metadata.json").read_text(encoding="utf-8"))
+            self.assertEqual(metadata["outcome"], "submitted")
+            self.assertTrue(metadata["injected"])
+            self.assertEqual(metadata["submit_mode"], "auto")
+            self.assertTrue(metadata["submitted"])
 
 
 if __name__ == "__main__":

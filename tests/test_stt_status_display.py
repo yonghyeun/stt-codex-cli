@@ -66,6 +66,10 @@ class ParentStatusMessageTest(unittest.TestCase):
             ParentStatusMessage("STT inserted 11 chars | Enter to send"),
         )
         self.assertEqual(
+            compact_parent_status("submitted transcript 11 chars"),
+            ParentStatusMessage("STT submitted 11 chars"),
+        )
+        self.assertEqual(
             compact_parent_status("empty transcript; nothing injected"),
             ParentStatusMessage("STT empty: 인식된 말 없음 | Ctrl+T retry"),
         )

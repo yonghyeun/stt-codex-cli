@@ -50,6 +50,7 @@ DEFAULT_MIN_DURATION = 0.15
 DEFAULT_RUN_OUTPUT_DIR = "output/runs"
 DEFAULT_STT_BACKEND = "daemon"
 DEFAULT_AUDIO_HANDOFF = "auto"
+DEFAULT_SUBMIT_MODE = "review"
 DEFAULT_STT_INITIAL_PROMPT = DEFAULT_KOREAN_PHONETIC_INITIAL_PROMPT
 DEFAULT_STT_DAEMON_IDLE_TIMEOUT = 600.0
 DEFAULT_STT_DAEMON_START_TIMEOUT = 30.0
@@ -147,6 +148,16 @@ def parse_args() -> argparse.Namespace:
         "--disable-inject-key",
         action="store_true",
         help="Pass all stdin through without reserving an injection key.",
+    )
+    parser.add_argument(
+        "--submit-mode",
+        choices=("review", "auto"),
+        default=os.environ.get("STT_SUBMIT_MODE", DEFAULT_SUBMIT_MODE),
+        help=(
+            "What to do after text injection. review leaves text in the child input; "
+            "auto sends Enter after non-empty text. "
+            f"Default: {DEFAULT_SUBMIT_MODE}. Env: STT_SUBMIT_MODE"
+        ),
     )
     parser.add_argument(
         "--trigger-mode",
@@ -408,6 +419,7 @@ def save_run_artifacts(
     elapsed: float,
     injected: bool,
     outcome: str,
+    submitted: bool = False,
     error: str | None = None,
 ) -> Path | None:
     return save_runtime_run_artifacts(
@@ -420,6 +432,8 @@ def save_run_artifacts(
         started_at=started_at,
         elapsed=elapsed,
         injected=injected,
+        submitted=submitted,
+        submit_mode=args.submit_mode,
         outcome=outcome,
         error=error,
         stt={
@@ -442,6 +456,7 @@ def inject_transcript(args: argparse.Namespace, child_fd: int, transcript: str) 
         lambda message: parent_status(args, message),
         child_fd,
         transcript,
+        submit_mode=args.submit_mode,
     )
 
 
@@ -452,21 +467,26 @@ def parent_banner(args: argparse.Namespace, argv: list[str], cwd: str | None) ->
     parent_status(args, f"starting child: {format_command(argv)}")
     parent_status(args, f"cwd: {display_cwd}")
     if not args.disable_inject_key:
+        submit_description = (
+            "auto submit enabled"
+            if args.submit_mode == "auto"
+            else "Enter still manual"
+        )
         if args.inject_mode == "fixed-text":
             parent_status(
                 args,
-                f"inject key: {args.inject_key} -> {len(args.inject_text)} chars; Enter still manual",
+                f"inject key: {args.inject_key} -> {len(args.inject_text)} chars; {submit_description}",
             )
         else:
             if args.trigger_mode == "hold":
                 parent_status(
                     args,
-                    f"trigger key: {args.inject_key} hold/repeat; release gap {args.release_gap:g}s; Enter still manual",
+                    f"trigger key: {args.inject_key} hold/repeat; release gap {args.release_gap:g}s; {submit_description}",
                 )
             else:
                 parent_status(
                     args,
-                    f"trigger key: {args.inject_key} tap starts/stops recording; Esc cancels recording; Enter still manual",
+                    f"trigger key: {args.inject_key} tap starts/stops recording; Esc cancels recording; {submit_description}",
                 )
             parent_status(args, f"stt backend: {args.stt_backend}")
             parent_status(
@@ -503,7 +523,8 @@ def initial_parent_status(args: argparse.Namespace) -> str:
     if args.disable_inject_key:
         return "STT passthrough | inject key disabled"
     if args.inject_mode == "fixed-text":
-        return f"STT fixed-text | {args.inject_key} inserts {len(args.inject_text)} chars"
+        suffix = "auto submit" if args.submit_mode == "auto" else "manual Enter"
+        return f"STT fixed-text | {args.inject_key} inserts {len(args.inject_text)} chars | {suffix}"
     if args.trigger_mode == "hold":
         return f"STT idle | hold {args.inject_key} to record"
     return f"STT idle | {args.inject_key} start"

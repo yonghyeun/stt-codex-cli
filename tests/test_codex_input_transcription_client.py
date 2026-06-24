@@ -62,6 +62,7 @@ def make_args(**overrides: object) -> SimpleNamespace:
         "trigger_mode": "tap",
         "max_duration": 60.0,
         "release_gap": 0.35,
+        "submit_mode": "review",
     }
     values.update(overrides)
     return SimpleNamespace(**values)
@@ -122,6 +123,68 @@ class CodexInputTranscriptionClientTest(unittest.TestCase):
                 "injected transcript 15 chars; review text, then press Enter to send",
                 statuses,
             )
+
+    def test_finish_recording_auto_submit_writes_transcript_and_enter(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            audio_file = root / "audio.wav"
+            audio_file.write_bytes(b"fake wav")
+            state = RecordingState(
+                process=FinishedProcess(),  # type: ignore[arg-type]
+                audio_file=audio_file,
+                started_at=time.monotonic() - 1.0,
+                started_wall_at=datetime(2026, 6, 23, tzinfo=timezone.utc),
+                last_trigger_at=time.monotonic() - 1.0,
+            )
+            client = FakeTranscriptionClient()
+            config = codex_input.transcription_config_from_args(make_args())
+            statuses: list[str] = []
+            read_fd, write_fd = os.pipe()
+
+            try:
+                codex_input.finish_recording_and_inject(
+                    args=make_args(submit_mode="auto"),
+                    repo_root=root,
+                    child_fd=write_fd,
+                    child_command=["codex"],
+                    state=state,
+                    status=statuses.append,
+                    transcription_client=client,
+                    transcription_config=config,
+                )
+                os.close(write_fd)
+                write_fd = -1
+                injected = os.read(read_fd, 4096)
+            finally:
+                if write_fd >= 0:
+                    os.close(write_fd)
+                os.close(read_fd)
+
+            self.assertEqual(injected, b"fake transcript\r")
+            self.assertIn("submitted transcript 15 chars", statuses)
+
+    def test_empty_transcript_auto_submit_does_not_write_enter(self) -> None:
+        statuses: list[str] = []
+        read_fd, write_fd = os.pipe()
+
+        try:
+            injected = codex_input.inject_transcript(
+                statuses.append,
+                write_fd,
+                "",
+                submit_mode="auto",
+            )
+            os.close(write_fd)
+            write_fd = -1
+            forwarded = os.read(read_fd, 4096)
+        finally:
+            if write_fd >= 0:
+                os.close(write_fd)
+            os.close(read_fd)
+
+        self.assertFalse(injected)
+        self.assertEqual(forwarded, b"")
+        self.assertEqual(statuses, ["empty transcript; nothing injected"])
 
     def test_auto_audio_handoff_uses_buffer_for_worker_speed_path(self) -> None:
         args = make_args(stt_backend="worker", save_run=False, keep_audio=False)
@@ -213,6 +276,31 @@ class CodexInputTranscriptionClientTest(unittest.TestCase):
         finally:
             os.close(write_fd)
             os.close(read_fd)
+
+    def test_fixed_text_auto_submit_writes_text_and_enter(self) -> None:
+        statuses: list[str] = []
+        read_fd, write_fd = os.pipe()
+
+        try:
+            codex_input.handle_fixed_text_injection(
+                args=make_args(
+                    inject_text="hello from fixed",
+                    submit_mode="auto",
+                ),
+                child_fd=write_fd,
+                data=b"before\x14after",
+                status=statuses.append,
+            )
+            os.close(write_fd)
+            write_fd = -1
+            forwarded = os.read(read_fd, 4096)
+        finally:
+            if write_fd >= 0:
+                os.close(write_fd)
+            os.close(read_fd)
+
+        self.assertEqual(forwarded, b"beforehello from fixed\rafter")
+        self.assertIn("submitted 16 chars", statuses)
 
     def test_tap_trigger_starts_recording_and_consumes_key(self) -> None:
         state = RecordingState()
