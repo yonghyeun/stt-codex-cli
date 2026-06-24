@@ -63,10 +63,20 @@ def compact_parent_status(message: str) -> ParentStatusMessage | None:
             f"STT inserted {injected_match.group(1)} chars | Enter to send"
         )
 
+    submitted_match = re.match(r"submitted transcript ([0-9]+) chars", normalized)
+    if submitted_match:
+        return ParentStatusMessage(f"STT submitted {submitted_match.group(1)} chars")
+
     fixed_injected_match = re.match(r"injected ([0-9]+) chars;", normalized)
     if fixed_injected_match:
         return ParentStatusMessage(
             f"STT inserted {fixed_injected_match.group(1)} chars | Enter to send"
+        )
+
+    fixed_submitted_match = re.match(r"submitted ([0-9]+) chars", normalized)
+    if fixed_submitted_match:
+        return ParentStatusMessage(
+            f"STT submitted {fixed_submitted_match.group(1)} chars"
         )
 
     if normalized == "empty transcript; nothing injected":

@@ -33,6 +33,7 @@ from stt_runtime.transcription import (
 
 READ_SIZE = 4096
 CANCEL_RECORDING_KEY_BYTES = b"\x1b"
+SUBMIT_ENTER_BYTES = b"\r"
 StatusFn = Callable[[str], None]
 
 
@@ -135,6 +136,8 @@ def save_and_cleanup_recorded_audio(
     recorded_audio: RecordedAudio,
     transcript: str,
     injected: bool,
+    submitted: bool,
+    submit_mode: str,
     outcome: str,
     error_message: str | None,
     transcription_config: TranscriptionConfig,
@@ -151,6 +154,8 @@ def save_and_cleanup_recorded_audio(
             started_at=recorded_audio.started_at,
             elapsed=recorded_audio.elapsed,
             injected=injected,
+            submitted=submitted,
+            submit_mode=submit_mode,
             outcome=outcome,
             error=error_message,
             stt=transcription_metadata(transcription_config),
@@ -168,14 +173,48 @@ def save_and_cleanup_recorded_audio(
     )
 
 
-def inject_transcript(status: StatusFn, child_fd: int, transcript: str) -> bool:
+def inject_transcript(
+    status: StatusFn,
+    child_fd: int,
+    transcript: str,
+    *,
+    submit_mode: str = "review",
+) -> bool:
+    return inject_transcript_with_submit_mode(
+        status,
+        child_fd,
+        transcript,
+        submit_mode=submit_mode,
+    )
+
+
+def submit_mode_from_args(args: object) -> str:
+    submit_mode = getattr(args, "submit_mode", "review")
+    if submit_mode not in {"review", "auto"}:
+        raise RuntimeError(f"unsupported submit mode: {submit_mode}")
+    return submit_mode
+
+
+def inject_transcript_with_submit_mode(
+    status: StatusFn,
+    child_fd: int,
+    transcript: str,
+    *,
+    submit_mode: str,
+) -> bool:
+    if submit_mode not in {"review", "auto"}:
+        raise RuntimeError(f"unsupported submit mode: {submit_mode}")
     if not transcript_has_text(transcript):
         status("empty transcript; nothing injected")
         return False
     os.write(child_fd, transcript.encode())
-    status(
-        f"injected transcript {len(transcript)} chars; review text, then press Enter to send"
-    )
+    if submit_mode == "auto":
+        os.write(child_fd, SUBMIT_ENTER_BYTES)
+        status(f"submitted transcript {len(transcript)} chars")
+    else:
+        status(
+            f"injected transcript {len(transcript)} chars; review text, then press Enter to send"
+        )
     return True
 
 
@@ -193,6 +232,8 @@ def finish_recording_and_inject(
     recorded_audio = stop_recording_result(state=state, status=status)
     transcript = ""
     injected = False
+    submitted = False
+    submit_mode = submit_mode_from_args(args)
     outcome = "unknown"
     error_message: str | None = None
     try:
@@ -206,8 +247,17 @@ def finish_recording_and_inject(
             transcription_request_from_recorded_audio(recorded_audio)
         )
         transcript = result.transcript
-        injected = inject_transcript(status, child_fd, transcript)
-        outcome = "injected" if injected else "empty_transcript"
+        injected = inject_transcript_with_submit_mode(
+            status,
+            child_fd,
+            transcript,
+            submit_mode=submit_mode,
+        )
+        submitted = injected and submit_mode == "auto"
+        if submitted:
+            outcome = "submitted"
+        else:
+            outcome = "injected" if injected else "empty_transcript"
     except RuntimeError as error:
         outcome = "stt_error"
         error_message = str(error)
@@ -220,6 +270,8 @@ def finish_recording_and_inject(
             recorded_audio=recorded_audio,
             transcript=transcript,
             injected=injected,
+            submitted=submitted,
+            submit_mode=submit_mode,
             outcome=outcome,
             error_message=error_message,
             transcription_config=transcription_config,
@@ -251,7 +303,13 @@ def handle_fixed_text_injection(
             os.write(child_fd, data[start:index])
 
         os.write(child_fd, args.inject_text.encode())
-        status(f"injected {len(args.inject_text)} chars; review text, then press Enter to send")
+        if submit_mode_from_args(args) == "auto":
+            os.write(child_fd, SUBMIT_ENTER_BYTES)
+            status(f"submitted {len(args.inject_text)} chars")
+        else:
+            status(
+                f"injected {len(args.inject_text)} chars; review text, then press Enter to send"
+            )
         start = index + len(trigger)
 
 
@@ -563,6 +621,8 @@ def passthrough(
                     recorded_audio=recorded_audio,
                     transcript="",
                     injected=False,
+                    submitted=False,
+                    submit_mode=submit_mode_from_args(args),
                     outcome="interrupted_recording",
                     error_message=None,
                     transcription_config=transcription_config,
