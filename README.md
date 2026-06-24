@@ -19,7 +19,7 @@ Linux에서 Codex CLI 입력을 보조하기 위한 로컬 STT 실험 workspace.
 
 최종 산출물은 Linux 데스크탑에서 사용자가 wrapper를 실행하면 그 안에서 Codex CLI가 child PTY로 구동되고, 사용자가 키로 녹음을 시작/종료하면 로컬 STT 모델이 음성을 텍스트로 변환해 Codex CLI 입력창에 삽입하는 입력 보조 도구다.
 
-사용자는 기본 `--submit-mode review`에서 삽입된 텍스트를 직접 확인하고 필요한 경우 수정한 뒤 Enter로 전송한다. `--submit-mode auto`는 transcript 삽입 직후 Enter를 전송하는 opt-in 실험 기능이다.
+사용자는 기본 `--submit-mode review`에서 삽입된 텍스트를 직접 확인하고 필요한 경우 수정한 뒤 Enter로 전송한다. `--submit-mode auto`는 transcript 삽입 후 Enter를 짧게 분리해 전송하는 opt-in 실험 기능이다.
 
 이 도구는 repo 전용 도구가 아니라 일반 terminal coding agent 입력 보조 도구로 확장 가능해야 한다. 초기 구현 대상은 Codex CLI다.
 
@@ -68,7 +68,7 @@ Boundary:
 - 기본 Codex 실행에는 `--no-alt-screen`을 붙여 parent/child 경계가 scrollback에 남게 한다.
 - STT 결과는 child PTY에 텍스트로만 삽입한다.
 - 기본 `--submit-mode review`에서는 Enter를 자동으로 보내지 않는다.
-- `--submit-mode auto`는 text가 있는 transcript 삽입 직후 Enter를 child PTY로 전송한다.
+- `--submit-mode auto`는 text가 있는 transcript 삽입 후 Enter를 짧게 분리해 child PTY로 전송한다.
 
 Storage:
 
@@ -443,7 +443,7 @@ E2E는 사용자가 실제 장비로 발화한 뒤 확인한다.
 - 사용자가 `Ctrl+T`를 한 번 눌러 녹음을 시작하고 다시 눌러 종료하면 로컬 STT가 transcript를 만든다.
 - 변환 결과가 Codex CLI 입력창에 삽입된다.
 - 기본 `review` mode에서는 사용자가 삽입된 텍스트를 확인하고 직접 전송한다.
-- opt-in `auto` mode에서는 text가 있는 transcript 삽입 직후 wrapper가 Enter를 전송한다.
+- opt-in `auto` mode에서는 text가 있는 transcript 삽입 후 wrapper가 Enter를 짧게 분리해 전송한다.
 - 정답 transcript가 있는 fixture WAV로 STT 변환 회귀 확인이 가능하다.
 - 한국어와 한영 혼합 명령의 실험 결과는 `experiments/`에 기록한다.
 - 기본값에서는 자동 전송 없이 사용자의 확인 단계를 유지한다.

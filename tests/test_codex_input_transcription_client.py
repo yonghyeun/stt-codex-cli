@@ -186,6 +186,37 @@ class CodexInputTranscriptionClientTest(unittest.TestCase):
         self.assertEqual(forwarded, b"")
         self.assertEqual(statuses, ["empty transcript; nothing injected"])
 
+    def test_auto_submit_separates_text_write_from_enter(self) -> None:
+        calls: list[tuple[str, object]] = []
+
+        def fake_write(fd: int, data: bytes) -> int:
+            calls.append(("write", data))
+            return len(data)
+
+        def fake_sleep(delay: float) -> None:
+            calls.append(("sleep", delay))
+
+        with (
+            patch.object(codex_input.os, "write", fake_write),
+            patch.object(codex_input.time, "sleep", fake_sleep),
+        ):
+            injected = codex_input.inject_transcript(
+                lambda message: None,
+                123,
+                "/quit",
+                submit_mode="auto",
+            )
+
+        self.assertTrue(injected)
+        self.assertEqual(
+            calls,
+            [
+                ("write", b"/quit"),
+                ("sleep", codex_input.AUTO_SUBMIT_DELAY_SECONDS),
+                ("write", b"\r"),
+            ],
+        )
+
     def test_auto_audio_handoff_uses_buffer_for_worker_speed_path(self) -> None:
         args = make_args(stt_backend="worker", save_run=False, keep_audio=False)
 

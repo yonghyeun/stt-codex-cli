@@ -34,6 +34,7 @@ from stt_runtime.transcription import (
 READ_SIZE = 4096
 CANCEL_RECORDING_KEY_BYTES = b"\x1b"
 SUBMIT_ENTER_BYTES = b"\r"
+AUTO_SUBMIT_DELAY_SECONDS = 0.05
 StatusFn = Callable[[str], None]
 
 
@@ -209,13 +210,18 @@ def inject_transcript_with_submit_mode(
         return False
     os.write(child_fd, transcript.encode())
     if submit_mode == "auto":
-        os.write(child_fd, SUBMIT_ENTER_BYTES)
+        submit_child_input(child_fd)
         status(f"submitted transcript {len(transcript)} chars")
     else:
         status(
             f"injected transcript {len(transcript)} chars; review text, then press Enter to send"
         )
     return True
+
+
+def submit_child_input(child_fd: int) -> None:
+    time.sleep(AUTO_SUBMIT_DELAY_SECONDS)
+    os.write(child_fd, SUBMIT_ENTER_BYTES)
 
 
 def finish_recording_and_inject(
@@ -304,7 +310,7 @@ def handle_fixed_text_injection(
 
         os.write(child_fd, args.inject_text.encode())
         if submit_mode_from_args(args) == "auto":
-            os.write(child_fd, SUBMIT_ENTER_BYTES)
+            submit_child_input(child_fd)
             status(f"submitted {len(args.inject_text)} chars")
         else:
             status(
