@@ -8,7 +8,7 @@ STT 실행 스크립트 위치.
 - 로컬 STT 변환.
 - Codex CLI를 child PTY로 실행.
 - STT 결과를 Codex CLI 입력창에 삽입.
-- 사용자가 확인 후 직접 전송.
+- 기본값에서는 사용자가 확인 후 직접 전송.
 
 ## Setup
 
@@ -187,7 +187,8 @@ STT_TRIGGER_MODE=hold STT_PTT_RELEASE_GAP=0.5 scripts/stt_codex.py
 - 이전 `speed` profile의 값은 `0.35s`였고, hold mode 기본값과 같다.
 - hold mode 우선순위는 `--release-gap`, `STT_PTT_RELEASE_GAP`, 기본값 순서다.
 - `--ptt-profile`과 `STT_PTT_PROFILE`은 더 이상 설정 surface가 아니다.
-- Enter 자동 전송은 없다. transcript 삽입 뒤 사용자가 직접 확인하고 전송한다.
+- 기본 `--submit-mode review`에서는 Enter 자동 전송이 없다. transcript 삽입 뒤 사용자가 직접 확인하고 전송한다.
+- `--submit-mode auto`는 opt-in 실험 기능이며, text가 있는 transcript 삽입 직후 Enter를 보낸다.
 - Fixed smoke STT는 이 계약 변경에서 재측정하지 않는다. 이유는 release-gap이
   hold mode CLI/env stop timing 선택만 바꾸기 때문이다.
 - Report 위치: `evals/stt_accuracy/reports/2026-06-23-release-gap-speed-profile.md`.
@@ -312,11 +313,12 @@ Floor와 report 위치:
 | load-time | `--stt-model`, `--stt-device`, `--stt-compute-type`, `--stt-backend` | model load 비용과 process 수명에 영향을 준다. 기본 backend는 `daemon`이다. |
 | decode-time | `--stt-beam-size`, `--stt-no-vad-filter`, `--stt-initial-prompt`, `--stt-language` | 이미 녹음된 audio를 transcript로 바꾸는 decoding 정책이다. |
 | runtime/backend | `--trigger-mode`, `--release-gap`, `--min-duration`, `--max-duration`, `--audio-handoff` | 녹음 stop timing, 녹음 길이 guard, audio handoff 방식을 바꾼다. |
+| submit-time | `--submit-mode` | 삽입된 text를 review 상태로 둘지, text가 있을 때 즉시 Enter까지 보낼지 결정한다. 기본값은 `review`다. |
 | artifact/debug | `--save-run`, `--keep-audio`, `--run-output-dir`, `--temp-dir` | run artifact와 임시 audio 보존 정책이다. |
 
 `--trigger-mode tap`이 기본 runtime stop timing 정책이다. `--release-gap`은 legacy hold mode runtime option이다. `daemon` backend와 buffer handoff는
 공통 runtime 기본값이다. `--stt-backend subprocess`와 `--audio-handoff file`은
-명시 override다. `--stt-beam-size`와 VAD 설정은 decode-time option이다.
+명시 override다. `--submit-mode auto`는 opt-in submit-time 실험 기능이다. `--stt-beam-size`와 VAD 설정은 decode-time option이다.
 
 ## Speech Sample Recording
 
@@ -531,8 +533,9 @@ scripts/stt_codex.py --cmd python3 -- -q
 - `--inject-key`로 삽입 trigger key를 바꾼다.
 - `--trigger-mode tap`이 STT mode 기본값이다. 첫 trigger는 녹음을 시작하고 다음 trigger는 녹음을 종료한다.
 - `--disable-inject-key`를 주면 모든 stdin을 child PTY로 그대로 전달한다.
-- injection은 텍스트만 삽입하며 Enter는 보내지 않는다.
-- Codex CLI 자동 전송은 하지 않는다.
+- 기본 `--submit-mode review` injection은 텍스트만 삽입하며 Enter는 보내지 않는다.
+- `--submit-mode auto`는 text가 있는 injection 뒤 Enter를 전송하는 opt-in 실험 기능이다.
+- Codex CLI 자동 전송은 기본값이 아니다.
 
 ## Prototype 14: Fixed Text Injection
 
@@ -548,7 +551,13 @@ scripts/stt_codex.py --inject-mode fixed-text
 hello from stt wrapper
 ```
 
-사용자는 내용을 확인한 뒤 직접 Enter를 누른다.
+기본 `--submit-mode review`에서는 사용자가 내용을 확인한 뒤 직접 Enter를 누른다.
+
+마이크 없이 자동 전송 경로를 확인해야 하면 fixed-text mode에서 `auto`를 켠다.
+
+```bash
+scripts/stt_codex.py --inject-mode fixed-text --submit-mode auto --cmd python3 -- -c 'import sys; print("child:" + sys.stdin.readline().strip())'
+```
 
 검증용 child command:
 
@@ -621,7 +630,10 @@ scripts/stt_codex.py --trigger-mode hold --release-gap 0.75
 - `--save-run`을 주면 `output/runs/` 아래에 audio, transcript, metadata를 저장한다.
 - transcript가 비어 있거나 punctuation-only이면 child PTY에 삽입하지 않는다.
 - token recovery는 수행하지 않는다.
-- Enter는 사용자가 직접 누른다.
+- 기본 `--submit-mode review`에서는 Enter를 사용자가 직접 누른다.
+- `--submit-mode auto`에서는 text가 있는 transcript 삽입 직후 Enter를 보낸다.
+- empty transcript, 짧은 녹음, STT error, Esc cancel 경로에서는 Enter를 보내지 않는다.
+- child PTY 입력창에 기존 text가 있으면 기존 text와 transcript가 함께 제출될 수 있다.
 
 ## Prototype 16: Optional Run Artifact Save
 
@@ -654,8 +666,8 @@ output/runs/20260620-153012-427-stt-codex/
 
 - directory 이름은 `YYYYMMDD-HHMMSS-mmm-stt-codex` 형식이다.
 - 같은 millisecond에 충돌하면 `-001` suffix를 붙인다.
-- `metadata.json`에는 recording config, STT option, elapsed time, outcome, injected 여부를 기록한다.
-- 가능한 outcome은 `injected`, `empty_transcript`, `skipped_short_recording`, `stt_error`, `interrupted_recording`이다.
+- `metadata.json`에는 recording config, STT option, elapsed time, outcome, injected 여부, submit mode, submitted 여부를 기록한다.
+- 가능한 outcome은 `injected`, `submitted`, `empty_transcript`, `skipped_short_recording`, `stt_error`, `interrupted_recording`이다.
 - `--keep-audio`는 system temp directory의 임시 WAV도 함께 남기는 debug option이다.
 
 ## Prototype 1: Record Only
