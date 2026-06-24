@@ -15,11 +15,17 @@ class ParentStatusMessageTest(unittest.TestCase):
     def test_compacts_recording_lifecycle_for_user_status_bar(self) -> None:
         self.assertEqual(
             compact_parent_status("recording started: in-memory audio buffer"),
-            ParentStatusMessage("STT recording 중 | Ctrl+T stop"),
+            ParentStatusMessage("STT recording 중 | Ctrl+T stop | Esc cancel"),
         )
         self.assertEqual(
             compact_parent_status("recording progress: elapsed=5.20s max=60s"),
-            ParentStatusMessage("STT recording 중 00:05 / 01:00 | Ctrl+T stop"),
+            ParentStatusMessage(
+                "STT recording 중 00:05 / 01:00 | Ctrl+T stop | Esc cancel"
+            ),
+        )
+        self.assertEqual(
+            compact_parent_status("recording canceled: elapsed=0.42s"),
+            ParentStatusMessage("STT canceled | Ctrl+T retry"),
         )
         self.assertEqual(
             compact_parent_status("recording stopped: elapsed=0.58s"),
@@ -175,7 +181,7 @@ class TerminalStatusRendererTest(unittest.TestCase):
 
         self.assertEqual(
             stream.getvalue(),
-            "\033[s\033[24;1H\033[2KSTT recording 중 | Ctrl+T stop\033[u",
+            "\033[s\033[24;1H\033[2KSTT recording 중 | Ctrl+T stop | Esc c...\033[u",
         )
 
     def test_interactive_renderer_clamps_zero_sized_terminal_rows(self) -> None:
@@ -193,7 +199,7 @@ class TerminalStatusRendererTest(unittest.TestCase):
 
         self.assertEqual(
             stream.getvalue(),
-            "\033[s\033[1;1H\033[2KSTT recording 중 | Ctrl+T stop\033[u",
+            "\033[s\033[1;1H\033[2KSTT recording 중 | Ctrl+T stop | Esc cancel\033[u",
         )
 
     def test_default_renderer_hides_verbose_status_noise(self) -> None:

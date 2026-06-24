@@ -466,7 +466,7 @@ def parent_banner(args: argparse.Namespace, argv: list[str], cwd: str | None) ->
             else:
                 parent_status(
                     args,
-                    f"trigger key: {args.inject_key} tap starts/stops recording; Enter still manual",
+                    f"trigger key: {args.inject_key} tap starts/stops recording; Esc cancels recording; Enter still manual",
                 )
             parent_status(args, f"stt backend: {args.stt_backend}")
             parent_status(
