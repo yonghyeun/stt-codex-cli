@@ -188,7 +188,7 @@ STT_TRIGGER_MODE=hold STT_PTT_RELEASE_GAP=0.5 scripts/stt_codex.py
 - hold mode 우선순위는 `--release-gap`, `STT_PTT_RELEASE_GAP`, 기본값 순서다.
 - `--ptt-profile`과 `STT_PTT_PROFILE`은 더 이상 설정 surface가 아니다.
 - 기본 `--submit-mode review`에서는 Enter 자동 전송이 없다. transcript 삽입 뒤 사용자가 직접 확인하고 전송한다.
-- `--submit-mode auto`는 opt-in 실험 기능이며, text가 있는 transcript 삽입 직후 Enter를 보낸다.
+- `--submit-mode auto`는 opt-in 실험 기능이며, text가 있는 transcript 삽입 후 Enter를 짧게 분리해 보낸다.
 - Fixed smoke STT는 이 계약 변경에서 재측정하지 않는다. 이유는 release-gap이
   hold mode CLI/env stop timing 선택만 바꾸기 때문이다.
 - Report 위치: `evals/stt_accuracy/reports/2026-06-23-release-gap-speed-profile.md`.
@@ -559,6 +559,14 @@ hello from stt wrapper
 scripts/stt_codex.py --inject-mode fixed-text --submit-mode auto --cmd python3 -- -c 'import sys; print("child:" + sys.stdin.readline().strip())'
 ```
 
+Codex submit 경로는 모델 요청 없이 `/quit` slash command로 확인할 수 있다.
+
+```bash
+scripts/stt_codex.py --inject-mode fixed-text --inject-text /quit --submit-mode auto --parent-panel none --cmd codex -- --no-alt-screen
+```
+
+위 command에서 `Ctrl+T`를 누르면 `/quit`이 삽입된 뒤 Enter가 분리 전송되고 Codex가 종료되어야 한다.
+
 검증용 child command:
 
 ```bash
@@ -631,7 +639,7 @@ scripts/stt_codex.py --trigger-mode hold --release-gap 0.75
 - transcript가 비어 있거나 punctuation-only이면 child PTY에 삽입하지 않는다.
 - token recovery는 수행하지 않는다.
 - 기본 `--submit-mode review`에서는 Enter를 사용자가 직접 누른다.
-- `--submit-mode auto`에서는 text가 있는 transcript 삽입 직후 Enter를 보낸다.
+- `--submit-mode auto`에서는 text가 있는 transcript 삽입 후 Enter를 짧게 분리해 보낸다.
 - empty transcript, 짧은 녹음, STT error, Esc cancel 경로에서는 Enter를 보내지 않는다.
 - child PTY 입력창에 기존 text가 있으면 기존 text와 transcript가 함께 제출될 수 있다.
 
