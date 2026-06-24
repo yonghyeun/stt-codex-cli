@@ -560,7 +560,7 @@ scripts/stt_codex.py --inject-mode fixed-text --cmd python3 -- -c 'import sys; p
 
 ## Prototype 15: STT Transcript Injection
 
-기본 mode다. `Ctrl+T`를 한 번 눌러 녹음을 시작하고, 말을 끝낸 뒤 `Ctrl+T`를 다시 한 번 눌러 녹음을 종료한다. 종료 뒤 STT raw transcript를 child PTY 입력창에 삽입한다.
+기본 mode다. `Ctrl+T`를 한 번 눌러 녹음을 시작하고, 말을 끝낸 뒤 `Ctrl+T`를 다시 한 번 눌러 녹음을 종료한다. 종료 뒤 STT raw transcript를 child PTY 입력창에 삽입한다. 녹음 중 `Esc`를 누르면 현재 녹음을 취소하고 audio를 폐기하며 STT와 child PTY 삽입을 건너뛴다.
 
 ```bash
 scripts/stt_codex.py
@@ -588,7 +588,8 @@ scripts/stt_codex.py --trigger-mode hold --release-gap 0.75
 - `ctrl+t`는 child PTY로 전달되지 않고 parent가 소비한다.
 - 기본 trigger mode는 `tap`이다.
 - `tap` mode에서 첫 `ctrl+t`는 녹음을 시작하고 다음 `ctrl+t`는 녹음을 종료한다.
-- 녹음 중 status bar는 `STT recording 중 00:05 / 01:00 | Ctrl+T stop`처럼 현재/최대 녹음 시간을 표시한다.
+- 녹음 중 status bar는 `STT recording 중 00:05 / 01:00 | Ctrl+T stop | Esc cancel`처럼 현재/최대 녹음 시간과 cancel affordance를 표시한다.
+- 녹음 중 `Esc`는 cancel로 소비된다. 녹음 중이 아니면 child PTY로 전달된다.
 - `--inject-key t`처럼 trigger를 바꿀 수 있다.
 - `--trigger-mode hold`는 이전 hold/repeat PTT 동작을 유지한다.
 - `--release-gap`은 `hold` mode에서 trigger 반복 입력이 끊긴 뒤 녹음을 종료할 때까지 기다리는 시간을 직접 지정한다.

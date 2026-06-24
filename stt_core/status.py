@@ -15,7 +15,7 @@ def compact_parent_status(message: str) -> ParentStatusMessage | None:
         return None
 
     if normalized.startswith("recording started:"):
-        return ParentStatusMessage("STT recording 중 | Ctrl+T stop")
+        return ParentStatusMessage("STT recording 중 | Ctrl+T stop | Esc cancel")
 
     recording_progress_match = re.match(
         r"recording progress: elapsed=([0-9.]+)s max=([0-9.]+)s",
@@ -25,8 +25,11 @@ def compact_parent_status(message: str) -> ParentStatusMessage | None:
         elapsed = format_status_duration(float(recording_progress_match.group(1)))
         maximum = format_status_duration(float(recording_progress_match.group(2)))
         return ParentStatusMessage(
-            f"STT recording 중 {elapsed} / {maximum} | Ctrl+T stop"
+            f"STT recording 중 {elapsed} / {maximum} | Ctrl+T stop | Esc cancel"
         )
+
+    if normalized.startswith("recording canceled:"):
+        return ParentStatusMessage("STT canceled | Ctrl+T retry")
 
     stopped_match = re.match(r"recording stopped: elapsed=([0-9.]+)s", normalized)
     if stopped_match:

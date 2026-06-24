@@ -38,6 +38,7 @@ class RecordingState:
     last_trigger_at: float | None = None
     last_progress_second: int | None = None
     stop_requested: bool = False
+    cancel_requested: bool = False
 
     def active(self) -> bool:
         return self.process is not None
@@ -135,6 +136,7 @@ def start_recording(
     state.last_trigger_at = state.started_at
     state.last_progress_second = None
     state.stop_requested = False
+    state.cancel_requested = False
     if audio_file is not None:
         status(f"recording started: {audio_file}")
     else:
@@ -186,6 +188,7 @@ def stop_recording_result(
     state.last_trigger_at = None
     state.last_progress_second = None
     state.stop_requested = False
+    state.cancel_requested = False
     status(f"recording stopped: elapsed={elapsed:.2f}s")
     return RecordedAudio(
         audio_file=audio_file,
@@ -194,6 +197,51 @@ def stop_recording_result(
         started_at=started_wall_at,
         handoff=handoff,
     )
+
+
+def cancel_recording(
+    *,
+    state: RecordingState,
+    status: StatusFn,
+) -> None:
+    if state.process is None:
+        raise RuntimeError("recording is not running")
+
+    process = state.process
+    audio_file = state.audio_file
+    audio_reader = state.audio_reader
+    elapsed = state.elapsed()
+    if process.poll() is None:
+        process.send_signal(signal.SIGINT)
+        try:
+            process.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            process.terminate()
+            try:
+                process.wait(timeout=2)
+            except subprocess.TimeoutExpired:
+                process.kill()
+                process.wait(timeout=2)
+    if audio_reader is not None:
+        audio_reader.join(timeout=2)
+    if audio_file is not None:
+        try:
+            audio_file.unlink()
+        except FileNotFoundError:
+            pass
+
+    state.process = None
+    state.audio_file = None
+    state.audio_chunks = None
+    state.audio_reader = None
+    state.handoff = "file"
+    state.started_at = None
+    state.started_wall_at = None
+    state.last_trigger_at = None
+    state.last_progress_second = None
+    state.stop_requested = False
+    state.cancel_requested = False
+    status(f"recording canceled: elapsed={elapsed:.2f}s")
 
 
 def stop_recording(

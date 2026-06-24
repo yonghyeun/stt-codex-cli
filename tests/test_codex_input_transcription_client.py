@@ -274,6 +274,101 @@ class CodexInputTranscriptionClientTest(unittest.TestCase):
         self.assertTrue(state.stop_requested)
         self.assertEqual(forwarded, b"")
 
+    def test_esc_requests_cancel_without_forwarding_key_while_recording(self) -> None:
+        state = RecordingState(
+            process=FinishedProcess(),  # type: ignore[arg-type]
+            started_at=time.monotonic() - 1.0,
+            last_trigger_at=time.monotonic() - 1.0,
+        )
+        read_fd, write_fd = os.pipe()
+
+        try:
+            codex_input.handle_stdin_data(
+                args=make_args(),
+                child_fd=write_fd,
+                data=b"\x1b",
+                state=state,
+                status=lambda message: None,
+            )
+            os.close(write_fd)
+            write_fd = -1
+            forwarded = os.read(read_fd, 4096)
+        finally:
+            if write_fd >= 0:
+                os.close(write_fd)
+            os.close(read_fd)
+
+        self.assertTrue(state.cancel_requested)
+        self.assertFalse(state.stop_requested)
+        self.assertEqual(forwarded, b"")
+
+    def test_esc_passes_through_when_not_recording(self) -> None:
+        state = RecordingState()
+        read_fd, write_fd = os.pipe()
+
+        try:
+            codex_input.handle_stdin_data(
+                args=make_args(),
+                child_fd=write_fd,
+                data=b"\x1b",
+                state=state,
+                status=lambda message: None,
+            )
+            os.close(write_fd)
+            write_fd = -1
+            forwarded = os.read(read_fd, 4096)
+        finally:
+            if write_fd >= 0:
+                os.close(write_fd)
+            os.close(read_fd)
+
+        self.assertEqual(forwarded, b"\x1b")
+
+    def test_tap_mode_cancels_without_transcription_or_injection(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            audio_file = root / "cancel.wav"
+            audio_file.write_bytes(b"fake wav")
+            state = RecordingState(
+                process=FinishedProcess(),  # type: ignore[arg-type]
+                audio_file=audio_file,
+                started_at=time.monotonic() - 1.0,
+                started_wall_at=datetime(2026, 6, 23, tzinfo=timezone.utc),
+                last_trigger_at=time.monotonic() - 1.0,
+                cancel_requested=True,
+            )
+            client = FakeTranscriptionClient()
+            config = codex_input.transcription_config_from_args(make_args())
+            statuses: list[str] = []
+            read_fd, write_fd = os.pipe()
+
+            try:
+                codex_input.maybe_finish_stt_recording(
+                    args=make_args(),
+                    repo_root=root,
+                    child_fd=write_fd,
+                    child_command=["codex"],
+                    state=state,
+                    status=statuses.append,
+                    transcription_client=client,
+                    transcription_config=config,
+                )
+                os.close(write_fd)
+                write_fd = -1
+                forwarded = os.read(read_fd, 4096)
+            finally:
+                if write_fd >= 0:
+                    os.close(write_fd)
+                os.close(read_fd)
+
+            self.assertFalse(state.active())
+            self.assertEqual(client.requests, [])
+            self.assertEqual(forwarded, b"")
+            self.assertFalse(audio_file.exists())
+            self.assertTrue(
+                any(status.startswith("recording canceled:") for status in statuses)
+            )
+
     def test_tap_mode_ignores_release_gap_until_stop_is_requested(self) -> None:
         state = RecordingState(
             process=FinishedProcess(),  # type: ignore[arg-type]

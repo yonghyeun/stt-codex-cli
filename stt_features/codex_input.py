@@ -14,6 +14,7 @@ from stt_runtime.child_process import decode_wait_status, reap_child
 from stt_runtime.recording import (
     RecordedAudio,
     RecordingState,
+    cancel_recording,
     cleanup_recorded_audio,
     start_recording,
     stop_recording_result,
@@ -31,6 +32,7 @@ from stt_runtime.transcription import (
 
 
 READ_SIZE = 4096
+CANCEL_RECORDING_KEY_BYTES = b"\x1b"
 StatusFn = Callable[[str], None]
 
 
@@ -269,27 +271,43 @@ def handle_stt_ptt_input(
     trigger_mode = getattr(args, "trigger_mode", "tap")
     start = 0
     while True:
-        index = data.find(trigger, start)
-        if index < 0:
+        trigger_index = data.find(trigger, start)
+        cancel_index = data.find(CANCEL_RECORDING_KEY_BYTES, start)
+        if trigger_index < 0 and cancel_index < 0:
             if start < len(data):
                 os.write(child_fd, data[start:])
             return
 
+        if trigger_index >= 0 and (cancel_index < 0 or trigger_index <= cancel_index):
+            index = trigger_index
+            control_key = trigger
+            control = "trigger"
+        else:
+            index = cancel_index
+            control_key = CANCEL_RECORDING_KEY_BYTES
+            control = "cancel"
+
         if index > start:
             os.write(child_fd, data[start:index])
 
-        if not state.active():
-            start_recording(
-                temp_dir=args.temp_dir,
-                state=state,
-                status=status,
-                handoff=resolve_audio_handoff(args),
-            )
-        elif trigger_mode == "tap":
-            state.stop_requested = True
+        if control == "cancel":
+            if state.active():
+                state.cancel_requested = True
+            else:
+                os.write(child_fd, control_key)
         else:
-            state.last_trigger_at = time.monotonic()
-        start = index + len(trigger)
+            if not state.active():
+                start_recording(
+                    temp_dir=args.temp_dir,
+                    state=state,
+                    status=status,
+                    handoff=resolve_audio_handoff(args),
+                )
+            elif trigger_mode == "tap":
+                state.stop_requested = True
+            else:
+                state.last_trigger_at = time.monotonic()
+        start = index + len(control_key)
 
 
 def handle_stdin_data(
@@ -345,6 +363,13 @@ def maybe_finish_stt_recording(
     transcription_config: TranscriptionConfig,
 ) -> None:
     if not state.active():
+        return
+
+    if state.cancel_requested:
+        try:
+            cancel_recording(state=state, status=status)
+        except RuntimeError as error:
+            status(f"stt error: {error}")
         return
 
     if state.elapsed() >= args.max_duration:
