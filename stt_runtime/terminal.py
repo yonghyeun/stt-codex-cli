@@ -5,6 +5,7 @@ import struct
 import sys
 import termios
 import tty
+import unicodedata
 from collections.abc import Callable
 from pathlib import Path
 from typing import TextIO
@@ -165,11 +166,37 @@ class TerminalStatusRenderer:
         self.stream.flush()
 
     def _truncate(self, text: str, columns: int) -> str:
-        if columns <= 0 or len(text) <= columns:
+        if columns <= 0 or display_cell_width(text) <= columns:
             return text
         if columns <= 3:
-            return text[:columns]
-        return text[: columns - 3] + "..."
+            return truncate_display_cells(text, columns)
+        return truncate_display_cells(text, columns - 3) + "..."
+
+
+def display_cell_width(text: str) -> int:
+    return sum(character_cell_width(char) for char in text)
+
+
+def character_cell_width(char: str) -> int:
+    if unicodedata.combining(char):
+        return 0
+    if unicodedata.east_asian_width(char) in {"F", "W"}:
+        return 2
+    return 1
+
+
+def truncate_display_cells(text: str, columns: int) -> str:
+    if columns <= 0:
+        return ""
+    used = 0
+    chars: list[str] = []
+    for char in text:
+        width = character_cell_width(char)
+        if used + width > columns:
+            break
+        chars.append(char)
+        used += width
+    return "".join(chars)
 
 
 def copy_window_size(child_fd: int, *, reserved_rows: int = 0) -> None:
