@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import unicodedata
 import unittest
 from io import StringIO
 
@@ -9,6 +10,15 @@ from stt_core.status import (
     summarize_stt_error,
 )
 from stt_runtime.terminal import TerminalStatusRenderer, adjusted_child_size
+
+
+def display_cell_width(text: str) -> int:
+    total = 0
+    for char in text:
+        if unicodedata.combining(char):
+            continue
+        total += 2 if unicodedata.east_asian_width(char) in {"F", "W"} else 1
+    return total
 
 
 class ParentStatusMessageTest(unittest.TestCase):
@@ -185,8 +195,27 @@ class TerminalStatusRendererTest(unittest.TestCase):
 
         self.assertEqual(
             stream.getvalue(),
-            "\033[s\033[24;1H\033[2KSTT recording 중 | Ctrl+T stop | Esc c...\033[u",
+            "\033[s\033[24;1H\033[2KSTT recording 중 | Ctrl+T stop | Esc ...\033[u",
         )
+
+    def test_interactive_renderer_truncates_wide_status_to_terminal_width(
+        self,
+    ) -> None:
+        renderer = TerminalStatusRenderer(
+            stream=StringIO(),
+            enabled=True,
+            color=False,
+            debug=False,
+            interactive=True,
+            terminal_size=lambda: (24, 56),
+        )
+
+        display = renderer._truncate(
+            "STT recording 중 00:00 / 01:00 | Ctrl+T stop | Esc cancel",
+            56,
+        )
+
+        self.assertLessEqual(display_cell_width(display), 56)
 
     def test_interactive_renderer_clamps_zero_sized_terminal_rows(self) -> None:
         stream = StringIO()
